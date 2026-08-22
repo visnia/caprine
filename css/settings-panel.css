@@ -1,0 +1,644 @@
+:root {
+	--caprine-accent: #0866ff;
+	--caprine-accent-hover: #075ce5;
+	--caprine-panel: #fff;
+	--caprine-surface: #f0f2f5;
+	--caprine-surface-hover: #e4e6eb;
+	--caprine-border: #e4e6eb;
+	--caprine-text: #050505;
+	--caprine-secondary-text: #65676b;
+	--caprine-danger: #e41e3f;
+	--caprine-shadow: 0 12px 36px rgb(0 0 0 / 18%);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--caprine-panel: #242526;
+		--caprine-surface: #3a3b3c;
+		--caprine-surface-hover: #4e4f50;
+		--caprine-border: #3e4042;
+		--caprine-text: #e4e6eb;
+		--caprine-secondary-text: #b0b3b8;
+		--caprine-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+	}
+}
+
+.caprine-settings-launcher[data-caprine-theme='light'],
+.caprine-settings-backdrop[data-caprine-theme='light'] {
+	--caprine-panel: #fff;
+	--caprine-surface: #f0f2f5;
+	--caprine-surface-hover: #e4e6eb;
+	--caprine-border: #e4e6eb;
+	--caprine-text: #050505;
+	--caprine-secondary-text: #65676b;
+	--caprine-shadow: 0 12px 36px rgb(0 0 0 / 18%);
+}
+
+.caprine-settings-launcher[data-caprine-theme='dark'],
+.caprine-settings-backdrop[data-caprine-theme='dark'] {
+	--caprine-panel: #242526;
+	--caprine-surface: #3a3b3c;
+	--caprine-surface-hover: #4e4f50;
+	--caprine-border: #3e4042;
+	--caprine-text: #e4e6eb;
+	--caprine-secondary-text: #b0b3b8;
+	--caprine-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+}
+
+html.caprine-settings-open {
+	overflow: hidden;
+}
+
+.caprine-settings-launcher {
+	position: fixed;
+	right: auto;
+	bottom: 96px;
+	left: 19px;
+	z-index: 2147483000;
+	display: grid;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	place-items: center;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	box-shadow: none;
+	color: var(--caprine-secondary-text);
+	cursor: pointer;
+	transition: transform 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.caprine-settings-launcher:hover {
+	background: var(--caprine-surface);
+	box-shadow: none;
+	color: var(--caprine-text);
+	transform: none;
+}
+
+.caprine-settings-launcher:active {
+	transform: translateY(0) scale(0.96);
+}
+
+.caprine-settings-launcher:focus-visible,
+.caprine-settings-panel button:focus-visible,
+.caprine-settings-panel select:focus-visible,
+.caprine-settings-panel summary:focus-visible,
+.caprine-settings-panel input:focus-visible + span {
+	outline: 3px solid rgb(8 102 255 / 35%);
+	outline-offset: 2px;
+}
+
+.caprine-settings-launcher svg {
+	width: 20px;
+	height: 20px;
+	fill: currentcolor;
+}
+
+.caprine-settings-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 2147483646;
+	visibility: hidden;
+	background: rgb(0 0 0 / 28%);
+	opacity: 0%;
+	pointer-events: none;
+	transition: opacity 180ms ease, visibility 180ms ease;
+}
+
+.caprine-settings-backdrop.is-open {
+	visibility: visible;
+	opacity: 100%;
+	pointer-events: auto;
+}
+
+.caprine-settings-panel {
+	position: absolute;
+	inset: 0 0 0 auto;
+	display: flex;
+	width: min(430px, 100vw);
+	background: var(--caprine-panel);
+	box-shadow: var(--caprine-shadow);
+	color: var(--caprine-text);
+	transform: translateX(100%);
+	transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	flex-direction: column;
+}
+
+.caprine-settings-panel,
+.caprine-settings-header h1,
+.caprine-settings-section h2,
+.caprine-settings-label,
+.caprine-settings-stepper,
+.caprine-settings-language-picker,
+.caprine-settings-language-picker summary {
+	color: var(--caprine-text) !important;
+}
+
+.caprine-settings-section-description,
+.caprine-settings-description {
+	color: var(--caprine-secondary-text) !important;
+}
+
+.caprine-settings-backdrop.is-open .caprine-settings-panel {
+	transform: translateX(0);
+}
+
+.caprine-settings-header {
+	display: flex;
+	min-height: 72px;
+	padding: 16px 18px 14px 22px;
+	border-bottom: 1px solid var(--caprine-border);
+	align-items: center;
+	justify-content: space-between;
+}
+
+.caprine-settings-header h1 {
+	margin: 1px 0 0;
+	font-size: 24px;
+	font-weight: bold;
+	letter-spacing: -0.35px;
+}
+
+.caprine-settings-eyebrow {
+	display: block;
+	color: var(--caprine-accent);
+	font-size: 10px;
+	font-weight: 800;
+	letter-spacing: 1.4px;
+}
+
+.caprine-settings-close {
+	display: grid;
+	width: 36px;
+	height: 36px;
+	padding: 0 0 3px;
+	place-items: center;
+	border: none;
+	border-radius: 50%;
+	background: var(--caprine-surface);
+	color: var(--caprine-text);
+	cursor: pointer;
+	font: 28px/1 system-ui, sans-serif;
+}
+
+.caprine-settings-close:hover {
+	background: var(--caprine-surface-hover);
+}
+
+.caprine-settings-restart-notice {
+	display: none;
+	min-height: 42px;
+	padding: 8px 18px;
+	background: rgb(8 102 255 / 10%);
+	color: var(--caprine-text);
+	align-items: center;
+	font-size: 12px;
+	font-weight: 600;
+	gap: 12px;
+	justify-content: space-between;
+}
+
+.caprine-settings-restart-notice.is-visible {
+	display: flex;
+}
+
+.caprine-settings-restart-notice button {
+	padding: 7px 10px;
+	border: none;
+	border-radius: 7px;
+	background: var(--caprine-accent);
+	color: #fff;
+	cursor: pointer;
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.caprine-settings-restart-notice button:hover {
+	background: var(--caprine-accent-hover);
+}
+
+.caprine-settings-content {
+	overflow: auto;
+	overscroll-behavior: contain;
+	padding: 8px 14px 22px;
+}
+
+.caprine-settings-content::-webkit-scrollbar {
+	width: 10px;
+}
+
+.caprine-settings-content::-webkit-scrollbar-thumb {
+	border: 3px solid transparent;
+	border-radius: 8px;
+	background: var(--caprine-secondary-text);
+	background-clip: padding-box;
+}
+
+.caprine-settings-section {
+	padding: 18px 4px 8px;
+	border-bottom: 1px solid var(--caprine-border);
+}
+
+.caprine-settings-section h2 {
+	margin: 0 8px 4px;
+	font-size: 16px;
+	font-weight: bold;
+}
+
+.caprine-settings-section-description {
+	margin: 0 8px 10px;
+	color: var(--caprine-secondary-text);
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.caprine-settings-row {
+	display: flex;
+	min-height: 54px;
+	padding: 9px 8px;
+	border-radius: 10px;
+	align-items: center;
+	gap: 14px;
+	justify-content: space-between;
+}
+
+.caprine-settings-row:hover {
+	background: var(--caprine-surface);
+}
+
+.caprine-settings-copy {
+	min-width: 0;
+	flex: 1;
+}
+
+.caprine-settings-label {
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.25;
+}
+
+.caprine-settings-description {
+	margin-top: 3px;
+	color: var(--caprine-secondary-text);
+	font-size: 12px;
+	line-height: 1.35;
+}
+
+.caprine-settings-control {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+}
+
+.caprine-settings-toggle {
+	position: relative;
+	display: inline-flex;
+	width: 44px;
+	height: 24px;
+	cursor: pointer;
+}
+
+.caprine-settings-toggle input {
+	position: absolute;
+	opacity: 0%;
+	pointer-events: none;
+}
+
+.caprine-settings-toggle span {
+	position: absolute;
+	inset: 0;
+	border-radius: 999px;
+	background: var(--caprine-surface-hover);
+	transition: background 140ms ease;
+}
+
+.caprine-settings-toggle span::after {
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+	content: '';
+	transition: transform 140ms ease;
+}
+
+.caprine-settings-toggle input:checked + span {
+	background: var(--caprine-accent);
+}
+
+.caprine-settings-toggle input:checked + span::after {
+	transform: translateX(20px);
+}
+
+.caprine-settings-toggle input:disabled + span {
+	opacity: 55%;
+}
+
+.caprine-settings-select,
+.caprine-settings-action,
+.caprine-settings-link,
+.caprine-settings-stepper {
+	border: none;
+	border-radius: 8px;
+	background: var(--caprine-surface);
+	color: var(--caprine-text);
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.2;
+}
+
+.caprine-settings-select {
+	max-width: 150px;
+	padding: 8px 28px 8px 10px;
+	cursor: pointer;
+}
+
+.caprine-settings-action,
+.caprine-settings-link {
+	padding: 8px 12px;
+	cursor: pointer;
+}
+
+.caprine-settings-action:hover,
+.caprine-settings-link:hover {
+	background: var(--caprine-surface-hover);
+}
+
+.caprine-settings-action.is-dangerous {
+	background: rgb(228 30 63 / 10%);
+	color: var(--caprine-danger);
+}
+
+.caprine-settings-action.is-dangerous:hover {
+	background: rgb(228 30 63 / 18%);
+}
+
+.caprine-settings-action:disabled,
+.caprine-settings-link:disabled {
+	cursor: wait;
+	opacity: 55%;
+}
+
+.caprine-settings-stepper {
+	display: grid;
+	overflow: hidden;
+	grid-template-columns: 32px 54px 32px;
+	align-items: center;
+	text-align: center;
+}
+
+.caprine-settings-stepper button {
+	height: 32px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--caprine-text);
+	cursor: pointer;
+	font-size: 18px;
+}
+
+.caprine-settings-stepper button:hover:not(:disabled) {
+	background: var(--caprine-surface-hover);
+}
+
+.caprine-settings-stepper button:disabled {
+	cursor: default;
+	opacity: 35%;
+}
+
+.caprine-settings-stepper span {
+	font-size: 12px;
+	font-weight: bold;
+}
+
+.caprine-settings-emoji-picker {
+	position: relative;
+	width: 150px;
+}
+
+.caprine-settings-emoji-picker summary {
+	position: relative;
+	display: flex;
+	min-height: 32px;
+	padding: 5px 28px 5px 8px;
+	border-radius: 8px;
+	background: var(--caprine-surface);
+	color: var(--caprine-text);
+	align-items: center;
+	cursor: pointer;
+	list-style: none;
+}
+
+.caprine-settings-emoji-picker summary::-webkit-details-marker {
+	display: none;
+}
+
+.caprine-settings-emoji-picker summary::after {
+	position: absolute;
+	top: 50%;
+	right: 10px;
+	width: 6px;
+	height: 6px;
+	border-right: 2px solid var(--caprine-secondary-text);
+	border-bottom: 2px solid var(--caprine-secondary-text);
+	content: '';
+	transform: translateY(-70%) rotate(45deg);
+	transition: transform 120ms ease;
+}
+
+.caprine-settings-emoji-picker[open] summary::after {
+	transform: translateY(-30%) rotate(225deg);
+}
+
+.caprine-settings-emoji-picker summary:focus-visible {
+	outline: 3px solid rgb(8 102 255 / 35%);
+	outline-offset: 2px;
+}
+
+.caprine-settings-emoji-menu {
+	position: absolute;
+	z-index: 4;
+	top: calc(100% + 6px);
+	right: 0;
+	display: grid;
+	width: 260px;
+	padding: 6px;
+	border: 1px solid var(--caprine-border);
+	border-radius: 10px;
+	background: var(--caprine-panel);
+	box-shadow: 0 10px 28px rgb(0 0 0 / 22%);
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 6px;
+}
+
+.caprine-settings-emoji-option {
+	position: relative;
+	display: block;
+	cursor: pointer;
+}
+
+.caprine-settings-emoji-option input {
+	position: absolute;
+	opacity: 0%;
+	pointer-events: none;
+}
+
+.caprine-settings-emoji-option > span {
+	display: flex;
+	min-height: 38px;
+	padding: 5px 8px;
+	border: 1px solid var(--caprine-border);
+	border-radius: 8px;
+	background: var(--caprine-panel);
+	color: var(--caprine-text) !important;
+	align-items: center;
+	gap: 7px;
+	transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.caprine-settings-emoji-option:hover > span {
+	background: var(--caprine-surface);
+}
+
+.caprine-settings-emoji-option input:checked + span {
+	border-color: var(--caprine-accent);
+	background: rgb(8 102 255 / 10%);
+	box-shadow: inset 0 0 0 1px var(--caprine-accent);
+}
+
+.caprine-settings-emoji-option input:focus-visible + span {
+	outline: 3px solid rgb(8 102 255 / 35%);
+	outline-offset: 2px;
+}
+
+.caprine-settings-emoji-option img,
+.caprine-settings-emoji-selected img,
+.caprine-settings-system-emoji {
+	display: block;
+	width: 22px;
+	height: 22px;
+	flex: 0 0 22px;
+}
+
+.caprine-settings-system-emoji {
+	font-size: 19px;
+	line-height: 22px;
+	text-align: center;
+}
+
+.caprine-settings-emoji-label {
+	overflow: hidden;
+	font-size: 11px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.caprine-settings-emoji-selected,
+.caprine-settings-emoji-selected > span {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 7px;
+}
+
+.caprine-settings-language-picker {
+	margin: 6px 8px 10px;
+	border: 1px solid var(--caprine-border);
+	border-radius: 10px;
+}
+
+.caprine-settings-language-picker summary {
+	padding: 11px 12px;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.caprine-settings-language-list {
+	display: grid;
+	max-height: 220px;
+	overflow: auto;
+	padding: 4px 8px 10px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 2px 8px;
+}
+
+.caprine-settings-language {
+	display: flex;
+	min-width: 0;
+	padding: 6px 4px;
+	border-radius: 6px;
+	align-items: center;
+	cursor: pointer;
+	font-size: 12px;
+	gap: 7px;
+}
+
+.caprine-settings-language:hover {
+	background: var(--caprine-surface);
+}
+
+.caprine-settings-language span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.caprine-settings-language input {
+	accent-color: var(--caprine-accent);
+}
+
+.caprine-settings-link-grid {
+	display: grid;
+	margin: 10px 8px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.caprine-settings-link {
+	min-height: 38px;
+	text-align: left;
+}
+
+.caprine-settings-footer {
+	display: flex;
+	padding: 18px 8px 4px;
+	gap: 8px;
+	justify-content: flex-end;
+}
+
+@media (max-width: 520px) {
+	.caprine-settings-launcher {
+		bottom: 92px;
+		left: 16px;
+	}
+
+	.caprine-settings-panel {
+		width: 100vw;
+	}
+
+	.caprine-settings-language-list {
+		grid-template-columns: 1fr;
+	}
+
+	.caprine-settings-emoji-menu {
+		width: min(260px, calc(100vw - 32px));
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.caprine-settings-launcher,
+	.caprine-settings-backdrop,
+	.caprine-settings-panel,
+	.caprine-settings-toggle span,
+	.caprine-settings-toggle span::after {
+		transition: none;
+	}
+}

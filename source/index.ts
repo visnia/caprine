@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {readFileSync, existsSync} from 'node:fs';
+import {readFileSync, existsSync, writeFileSync} from 'node:fs';
 import process from 'node:process';
 import {
 	app,
@@ -20,7 +20,12 @@ import electronDl from 'electron-dl';
 import electronContextMenu from 'electron-context-menu';
 import electronLocalshortcut from 'electron-localshortcut';
 import electronDebug from 'electron-debug';
-import {is, darkMode} from 'electron-util';
+import {
+	is,
+	darkMode,
+	debugInfo,
+	openNewGitHubIssue,
+} from 'electron-util';
 import {bestFacebookLocaleFor} from 'facebook-locales';
 import doNotDisturb from '@sindresorhus/do-not-disturb';
 import updateAppMenu from './menu';
@@ -35,8 +40,14 @@ import {
 } from './util';
 import {process as processEmojiUrl} from './emoji';
 import ensureOnline from './ensure-online';
-import {setUpMenuBarMode} from './menu-bar-mode';
+import {setUpMenuBarMode, toggleMenuBarMode} from './menu-bar-mode';
 import {caprineIconPath} from './constants';
+import {getSpellCheckerLanguageOptions} from './spell-checker';
+import {
+	SettingsPanelAction,
+	SettingsPanelState,
+	SettingsPanelUpdate,
+} from './types';
 
 ipc.setMaxListeners(100);
 
@@ -287,10 +298,12 @@ function setUserLocale(): void {
 
 function setNotificationsMute(status: boolean): void {
 	const label = 'Mute Notifications';
-	const muteMenuItem = Menu.getApplicationMenu()!.getMenuItemById('mute-notifications')!;
+	const muteMenuItem = Menu.getApplicationMenu()?.getMenuItemById('mute-notifications');
 
 	config.set('notificationsMuted', status);
-	muteMenuItem.checked = status;
+	if (muteMenuItem) {
+		muteMenuItem.checked = status;
+	}
 
 	if (is.macos) {
 		const item = dockMenu.items.find(x => x.label === label);
@@ -304,7 +317,7 @@ function createMainWindow(): BrowserWindow {
 	// Messenger or Work Chat
 	const mainURL = config.get('useWorkChat')
 		? 'https://work.facebook.com/chat'
-		: 'https://www.messenger.com/login/';
+		: 'https://www.messenger.com/t/';
 
 	const win = new BrowserWindow({
 		title: app.name,
@@ -322,7 +335,7 @@ function createMainWindow(): BrowserWindow {
 			x: 80,
 			y: 20,
 		},
-		autoHideMenuBar: config.get('autoHideMenuBar'),
+		autoHideMenuBar: !is.macos,
 		webPreferences: {
 			preload: path.join(__dirname, 'browser.js'),
 			contextIsolation: true,
@@ -542,7 +555,7 @@ function createMainWindow(): BrowserWindow {
 
 		await updateAppMenu();
 
-		const files = ['browser.css', 'vibrancy.css', 'code-blocks.css', 'autoplay.css', 'scrollbar.css'];
+		const files = ['browser.css', 'settings-panel.css', 'vibrancy.css', 'code-blocks.css', 'autoplay.css', 'scrollbar.css'];
 
 		const cssPath = path.join(__dirname, '..', 'css');
 
@@ -725,6 +738,216 @@ ipc.answerRenderer('open-external', async (url: string) => {
 		}
 	} catch {
 		// Ignore malformed URLs received from page content.
+	}
+});
+
+ipc.answerRenderer<undefined, SettingsPanelState>('get-settings-panel-state', async () => {
+	const availableSpellCheckerLanguages = getSpellCheckerLanguageOptions();
+	return {
+		version: app.getVersion(),
+		platform: process.platform,
+		theme: config.get('theme'),
+		zoomFactor: config.get('zoomFactor'),
+		emojiStyle: config.get('emojiStyle'),
+		emojiStyleExamples: {
+			'facebook-3-0': nativeImage.createFromPath(path.join(__dirname, '..', 'static', 'emoji-facebook-3-0@2x.png')).toDataURL(),
+			'messenger-1-0': nativeImage.createFromPath(path.join(__dirname, '..', 'static', 'emoji-messenger-1-0@2x.png')).toDataURL(),
+			'facebook-2-2': nativeImage.createFromPath(path.join(__dirname, '..', 'static', 'emoji-facebook-2-2@2x.png')).toDataURL(),
+		},
+		notificationMessagePreview: config.get('notificationMessagePreview'),
+		notificationsMuted: config.get('notificationsMuted'),
+		callRingtoneMuted: config.get('callRingtoneMuted'),
+		showUnreadBadge: config.get('showUnreadBadge'),
+		alwaysOnTop: config.get('alwaysOnTop'),
+		launchAtLogin: app.getLoginItemSettings().openAtLogin,
+		showTrayIcon: config.get('showTrayIcon'),
+		launchMinimized: config.get('launchMinimized'),
+		quitOnWindowClose: config.get('quitOnWindowClose'),
+		autoUpdate: config.get('autoUpdate'),
+		bounceDockOnMessage: config.get('bounceDockOnMessage'),
+		menuBarMode: config.get('menuBarMode'),
+		isSpellCheckerEnabled: config.get('isSpellCheckerEnabled'),
+		hardwareAcceleration: config.get('hardwareAcceleration'),
+		useWorkChat: config.get('useWorkChat'),
+		spellCheckerLanguages: config.get('spellCheckerLanguages'),
+		availableSpellCheckerLanguages,
+	};
+});
+
+// The switch keeps side effects explicit for each user-facing setting.
+// eslint-disable-next-line complexity
+ipc.answerRenderer<SettingsPanelUpdate, void>('update-settings-panel-setting', async ({setting, value}) => {
+	const booleanValue = value as boolean;
+
+	// Every SettingsPanelSetting is handled below.
+	// eslint-disable-next-line default-case
+	switch (setting) {
+		case 'theme': {
+			config.set('theme', value as StoreType['theme']);
+			sendAction('set-theme');
+			break;
+		}
+
+		case 'emojiStyle': {
+			const emojiStyle = value as StoreType['emojiStyle'];
+			if (config.get('emojiStyle') !== emojiStyle) {
+				config.set('emojiStyle', emojiStyle);
+			}
+
+			break;
+		}
+
+		case 'notificationMessagePreview':
+		case 'notificationsMuted':
+		case 'callRingtoneMuted':
+		case 'quitOnWindowClose':
+		case 'autoUpdate':
+		case 'bounceDockOnMessage': {
+			config.set(setting, booleanValue);
+			break;
+		}
+
+		case 'showUnreadBadge': {
+			config.set('showUnreadBadge', booleanValue);
+			await updateBadge(previousMessageCount);
+			break;
+		}
+
+		case 'alwaysOnTop': {
+			config.set('alwaysOnTop', booleanValue);
+			mainWindow.setAlwaysOnTop(booleanValue);
+			break;
+		}
+
+		case 'launchAtLogin': {
+			app.setLoginItemSettings({
+				openAtLogin: booleanValue,
+				openAsHidden: booleanValue,
+			});
+			break;
+		}
+
+		case 'showTrayIcon': {
+			if (!booleanValue && config.get('launchMinimized')) {
+				break;
+			}
+
+			config.set('showTrayIcon', booleanValue);
+			if (booleanValue) {
+				tray.create(mainWindow);
+			} else {
+				tray.destroy();
+			}
+
+			break;
+		}
+
+		case 'launchMinimized': {
+			config.set('launchMinimized', booleanValue);
+			if (booleanValue && !config.get('showTrayIcon')) {
+				config.set('showTrayIcon', true);
+				tray.create(mainWindow);
+			}
+
+			break;
+		}
+
+		case 'menuBarMode': {
+			config.set('menuBarMode', booleanValue);
+			toggleMenuBarMode(mainWindow);
+			break;
+		}
+
+		case 'isSpellCheckerEnabled': {
+			config.set('isSpellCheckerEnabled', booleanValue);
+			break;
+		}
+
+		case 'hardwareAcceleration': {
+			config.set('hardwareAcceleration', booleanValue);
+			break;
+		}
+
+		case 'spellCheckerLanguage': {
+			const language = value as string;
+			const languages = config.get('spellCheckerLanguages');
+			const updatedLanguages = languages.includes(language)
+				? languages.filter(currentLanguage => currentLanguage !== language)
+				: [...languages, language];
+			config.set('spellCheckerLanguages', updatedLanguages);
+			session.defaultSession.setSpellCheckerLanguages(updatedLanguages);
+			break;
+		}
+	}
+
+	if (setting === 'theme') {
+		await updateAppMenu();
+	}
+});
+
+ipc.answerRenderer<SettingsPanelAction, void>('settings-panel-action', async action => {
+	const urls: Partial<Record<SettingsPanelAction, string>> = {
+		website: 'https://github.com/visnia/caprine',
+		'source-code': 'https://github.com/visnia/caprine',
+		donate: 'https://github.com/visnia/caprine?sponsor=1',
+	};
+	const url = urls[action];
+	if (url) {
+		await shell.openExternal(url);
+		return;
+	}
+
+	switch (action) {
+		case 'custom-styles': {
+			const filePath = path.join(app.getPath('userData'), 'custom.css');
+			if (!existsSync(filePath)) {
+				writeFileSync(filePath, `/*
+This is the custom styles file where you can add anything you want.
+The styles here will be injected into Caprine and will override default styles.
+
+Press Command/Ctrl+R in Caprine to see your changes.
+*/
+`, 'utf8');
+			}
+
+			await shell.openPath(filePath);
+			break;
+		}
+
+		case 'report-issue': {
+			openNewGitHubIssue({
+				user: 'visnia',
+				repo: 'caprine',
+				body: `
+<!-- Please succinctly describe your issue and steps to reproduce it. -->
+
+
+---
+
+${debugInfo()}`,
+			});
+			break;
+		}
+
+		case 'switch-to-messenger': {
+			config.set('useWorkChat', false);
+			app.relaunch();
+			app.quit();
+			break;
+		}
+
+		case 'relaunch': {
+			app.relaunch();
+			app.quit();
+			break;
+		}
+
+		case 'quit': {
+			app.quit();
+			break;
+		}
+
+		default:
 	}
 });
 

@@ -304,6 +304,10 @@ You can send code blocks by using [Markdown syntax](https://github.com/adam-p/ma
 <div align="center"><img src="media/screenshot-codeblocks-dark.png" width="784"></div>
 <div align="center"><img src="media/screenshot-codeblocks-light.png" width="784"></div>
 
+### Integrated settings
+
+Use the floating gear button or press <kbd>Command/Control</kbd> <kbd>,</kbd> to open Caprine settings without leaving Messenger. On Windows and Linux, the compact native fallback menu is hidden by default and can be revealed with <kbd>Alt</kbd>.
+
 ### Background behavior
 
 When closing the window, the app will by default continue running in the background, in the dock on macOS and the tray on Linux/Windows. Right-click the dock/tray icon and choose `Quit` to completely quit the app. On macOS, click the dock icon to show the window. On Linux, right-click the tray icon and choose `Toggle` to toggle the window. On Windows, click the tray icon to toggle the window.
@@ -320,19 +324,19 @@ Note that you can change the behavior of Caprine so that the app closes when the
 
 ### Custom languages for spell-check *(Not for macOS)*
 
-Users can select supported languages from `Conversation` → `Spell Checker Language`.
+Open the integrated Caprine settings panel with the floating gear button and select languages in the `Language` section.
 
 macOS detects the language automatically.
 
 ### Custom styles
 
-Advanced users can modify the colors/styles of Caprine. Click the menu item `Caprine`/`File` → `Caprine Settings` → `Advanced` → `Custom Styles` and a CSS file will open up in your default editor.
+Advanced users can modify the colors/styles of Caprine. Open Caprine settings, go to `Advanced`, and click `Open CSS` to open the custom stylesheet in your default editor.
 
 ### Menu Bar Mode *(macOS only)* <img src="media/screenshot-menu-bar-mode.png" width="20">
 
 <img src="media/screenshot-menu-bar-menu.png" width="140" align="right">
 
-You can enable `Show Menu Bar Icon` in the `Caprine Preferences` menu to have a Caprine icon in the menu bar. The icon will indicate when you have unread notifications and you can click it to toggle the Caprine window. You can also toggle the Caprine window with the global shortcut <kbd>Command</kbd> <kbd>Shift</kbd> <kbd>y</kbd>.
+You can enable `Show menu bar icon` in the `App behavior` section of Caprine settings. The icon will indicate when you have unread notifications and you can click it to toggle the Caprine window. You can also toggle the Caprine window with the global shortcut <kbd>Command</kbd> <kbd>Shift</kbd> <kbd>y</kbd>.
 
 You can also remove Caprine from the Dock and task switcher by clicking `Hide Dock Icon` menu item from the menu bar icon. There will then no longer be any menus for the window, but you can access those from the `Menu` item in the menu bar icon menu.
 
@@ -340,29 +344,12 @@ You can also remove Caprine from the Dock and task switcher by clicking `Hide Do
 
 Description            | Keys
 -----------------------| -----------------------
-New conversation       | <kbd>Command/Control</kbd> <kbd>n</kbd>
-Search conversations   | <kbd>Command/Control</kbd> <kbd>k</kbd>
-Toggle "Dark mode"     | <kbd>Command/Control</kbd> <kbd>d</kbd>
-Hide Names and Avatars | <kbd>Command/Control</kbd> <kbd>Shift</kbd> <kbd>n</kbd>
-Next conversation      | <kbd>Command/Control</kbd> <kbd>]</kbd> or <kbd>Control</kbd> <kbd>Tab</kbd>
-Previous conversation  | <kbd>Command/Control</kbd> <kbd>[</kbd> or <kbd>Control</kbd> <kbd>Shift</kbd> <kbd>Tab</kbd>
+Next conversation      | <kbd>Command/Control</kbd> <kbd>]</kbd>
+Previous conversation  | <kbd>Command/Control</kbd> <kbd>[</kbd>
 Jump to conversation   | <kbd>Command/Control</kbd> <kbd>1</kbd>…<kbd>9</kbd>
-Insert GIF             | <kbd>Command/Control</kbd> <kbd>g</kbd>
-Insert sticker         | <kbd>Command/Control</kbd> <kbd>s</kbd>
-Insert emoji           | <kbd>Command/Control</kbd> <kbd>e</kbd>
-Attach files           | <kbd>Command/Control</kbd> <kbd>t</kbd>
-Focus text input       | <kbd>Command/Control</kbd> <kbd>i</kbd>
-Search in conversation | <kbd>Command/Control</kbd> <kbd>f</kbd>
-Mute conversation      | <kbd>Command/Control</kbd> <kbd>Shift</kbd> <kbd>m</kbd>
-Hide conversation      | <kbd>Command/Control</kbd> <kbd>Shift</kbd> <kbd>h</kbd>
-Delete conversation    | <kbd>Command/Control</kbd> <kbd>Shift</kbd> <kbd>d</kbd>
-Toggle "Always on Top" | <kbd>Command/Control</kbd> <kbd>Shift</kbd> <kbd>t</kbd>
 Toggle window menu     | <kbd>Alt</kbd> *(Windows/Linux only)*
 Toggle main window     | <kbd>Command</kbd> <kbd>Shift</kbd> <kbd>y</kbd> *(macOS only)*
-Toggle sidebar         | <kbd>Command/Control</kbd> <kbd>Shift</kbd> <kbd>s</kbd>
-Switch to Messenger    | <kbd>Command/Control</kbd> <kbd>Shift</kbd> <kbd>1</kbd>
-Switch to Workchat     | <kbd>Command/Control</kbd> <kbd>Shift</kbd> <kbd>2</kbd>
-Preferences            | <kbd>Command/Control</kbd> <kbd>,</kbd>
+Caprine settings       | <kbd>Command/Control</kbd> <kbd>,</kbd>
 
 ###### Tip
 

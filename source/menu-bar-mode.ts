@@ -12,9 +12,10 @@ const menuBarShortcut = 'Command+Shift+y';
 
 export function toggleMenuBarMode(window: BrowserWindow): void {
 	const isEnabled = config.get('menuBarMode');
-	const menuItem = Menu.getApplicationMenu()!.getMenuItemById('menuBarMode')!;
-
-	menuItem.checked = isEnabled;
+	const menuItem = Menu.getApplicationMenu()?.getMenuItemById('menuBarMode');
+	if (menuItem) {
+		menuItem.checked = isEnabled;
+	}
 
 	window.setVisibleOnAllWorkspaces(isEnabled);
 
