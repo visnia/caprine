@@ -1,7 +1,7 @@
 {
 	"name": "caprine",
 	"productName": "Caprine",
-	"version": "2.62.0",
+	"version": "2.62.1",
 	"description": "Elegant Facebook Messenger desktop app",
 	"license": "MIT",
 	"repository": "sindresorhus/caprine",
@@ -12,7 +12,7 @@
 	},
 	"main": "dist-js",
 	"engines": {
-		"node": ">=16"
+		"node": ">=22.12.0"
 	},
 	"scripts": {
 		"postinstall": "patch-package && electron-builder install-app-deps",
