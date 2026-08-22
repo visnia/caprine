@@ -3,6 +3,8 @@ on:
   push:
     tags:
       - '*'
+permissions:
+  contents: write
 jobs:
   tests:
     uses: ./.github/workflows/tests.yml
@@ -38,19 +40,19 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
       - name: Package Caprine for macOS
         if: startsWith(matrix.os, 'macos')
-        run: npm run dist:mac
+        run: npm run dist:mac -- --publish always
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Package Caprine for Windows
         if: startsWith(matrix.os, 'windows')
-        run: npm run dist:win
+        run: npm run dist:win -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Package Caprine for Linux
         if: startsWith(matrix.os, 'ubuntu')
-        run: npm run dist:linux
+        run: npm run dist:linux -- --publish always
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.snapcraft_token }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
