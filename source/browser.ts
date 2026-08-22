@@ -1,4 +1,5 @@
 import process from 'node:process';
+import {webFrame} from 'electron';
 import {ipcRenderer as ipc} from 'electron-better-ipc';
 import {is} from 'electron-util';
 import elementReady from 'element-ready';
@@ -7,6 +8,7 @@ import selectors from './browser/selectors';
 import {toggleVideoAutoplay} from './autoplay';
 import {sendConversationList} from './browser/conversation-list';
 import {IToggleSounds} from './types';
+import {initializeSettingsPanel} from './settings-panel';
 
 type ThemeSource = typeof nativeTheme.themeSource;
 
@@ -136,7 +138,7 @@ ipc.answerMain('new-room', async () => {
 	document.querySelector<HTMLElement>('.x16n37ib .x1i10hfl.x6umtig.x1b1mbwd.xaqea5y.xav7gou.x1ypdohk.xe8uvvx.xdj266r.x11i5rnm.xat24cr.x1mh8g0r.x16tdsg8.x1hl2dhg.xggy1nq.x87ps6o.x1lku1pv.x1a2a7pz.x6s0dn4.x14yjl9h.xudhj91.x18nykt9.xww2gxu.x972fbf.xcfux6l.x1qhh985.xm0m39n.x9f619.x78zum5.xl56j7k.xexx8yu.x4uap5.x18d9i69.xkhd6sd.x1n2onr6.xc9qbxq.x14qfxbe.x1qhmfi1')!.click();
 });
 
-ipc.answerMain('log-out', async () => {
+async function logOut(): Promise<void> {
 	const useWorkChat = await ipc.callMain<undefined, boolean>('get-config-useWorkChat');
 	if (useWorkChat) {
 		document.querySelector<HTMLElement>('._5lxs._3qct._p')!.click();
@@ -154,7 +156,9 @@ ipc.answerMain('log-out', async () => {
 			selectMenuItem(-1);
 		});
 	}
-});
+}
+
+ipc.answerMain('log-out', logOut);
 
 ipc.answerMain('find', () => {
 	document.querySelector<HTMLElement>('[type="search"]')!.focus();
@@ -543,11 +547,7 @@ function selectedConversationIndex(offset = 0): number {
 }
 
 async function setZoom(zoomFactor: number): Promise<void> {
-	const node = document.querySelector<HTMLElement>('#zoomFactor')!;
-	node.textContent = `
-		${selectors.conversationList} {zoom: ${zoomFactor} !important;}
-		${selectors.conversationSelector} {zoom: ${zoomFactor} !important;}
-	`;
+	webFrame.setZoomFactor(zoomFactor);
 	await ipc.callMain<number, void>('set-config-zoomFactor', zoomFactor);
 }
 
@@ -728,12 +728,7 @@ function addMacosDragBar(): void {
 	}, {passive: true});
 }
 
-// Inject a global style node to maintain custom appearance after conversation change or startup
 document.addEventListener('DOMContentLoaded', async () => {
-	const style = document.createElement('style');
-	style.id = 'zoomFactor';
-	document.body.append(style);
-
 	// Set the zoom factor if it was set before quitting
 	const zoomFactor = await ipc.callMain<undefined, number>('get-config-zoomFactor');
 	setZoom(zoomFactor);
@@ -748,6 +743,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 	setTheme();
 	// Keep native effects in sync with system theme changes.
 	observeTheme();
+
+	initializeSettingsPanel({
+		setZoom,
+		openMessengerSettings: openPreferences,
+		logOut,
+	});
 
 	// Activate Private Mode if it was set before quitting
 	setPrivateMode();

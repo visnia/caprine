@@ -1,0 +1,33 @@
+diff --git a/node_modules/electron-debug/index.js b/node_modules/electron-debug/index.js
+--- a/node_modules/electron-debug/index.js
++++ b/node_modules/electron-debug/index.js
+@@ -53,25 +53,14 @@ const inspectElements = () => {
+ 
+ const addExtensionIfInstalled = (name, getPath) => {
+ 	const isExtensionInstalled = name => {
+-		// For Electron >=9.
+-		if (session.defaultSession.getAllExtensions) {
+-			return {}.hasOwnProperty.call(session.defaultSession.getAllExtensions(), name);
+-		}
+-
+-		// TODO: Remove this when targeting Electron >=9.
+-		return BrowserWindow.getDevToolsExtensions &&
+-			{}.hasOwnProperty.call(BrowserWindow.getDevToolsExtensions(), name);
++		return session.defaultSession.extensions
++			.getAllExtensions()
++			.some(extension => extension.name === name);
+ 	};
+ 
+ 	try {
+ 		if (!isExtensionInstalled(name)) {
+-			// For Electron >=9.
+-			if (session.defaultSession.loadExtension) {
+-				session.defaultSession.loadExtension(getPath(name));
+-			} else {
+-				// TODO: Remove this when targeting Electron >=9.
+-				BrowserWindow.addDevToolsExtension(getPath(name));
+-			}
++			session.defaultSession.extensions.loadExtension(getPath(name));
+ 		}
+ 	} catch (_) {}
+ };

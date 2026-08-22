@@ -1,5 +1,6 @@
 import {session, MenuItemConstructorOptions} from 'electron';
 import config from './config';
+import {SpellCheckerLanguageOption} from './types';
 
 const languageToCode = new Map<string, string>([
 	// All languages available in Electron's spellchecker
@@ -57,34 +58,42 @@ const languageToCode = new Map<string, string>([
 	['vi', 'Vietnamese'],
 ]);
 
-function getSpellCheckerLanguages(): MenuItemConstructorOptions[] {
+export function getSpellCheckerLanguageOptions(): SpellCheckerLanguageOption[] {
 	const availableLanguages = session.defaultSession.availableSpellCheckerLanguages;
-	const languageItem: MenuItemConstructorOptions[] = [];
-	let languagesChecked = config.get('spellCheckerLanguages');
+	const configuredLanguages = config.get('spellCheckerLanguages');
+	const validConfiguredLanguages = configuredLanguages.filter(language => availableLanguages.includes(language));
 
-	for (const language of languagesChecked) {
-		if (!availableLanguages.includes(language)) {
-			// Remove it since it's not in the spell checker dictionary.
-			languagesChecked = languagesChecked.filter(currentLang => currentLang !== language);
-			config.set('spellCheckerLanguages', languagesChecked);
-		}
+	if (validConfiguredLanguages.length !== configuredLanguages.length) {
+		config.set('spellCheckerLanguages', validConfiguredLanguages);
 	}
 
-	for (const language of availableLanguages) {
+	return availableLanguages.map(code => ({
+		code,
+		label: languageToCode.get(code) ?? languageToCode.get(code.split('-')[0]) ?? code,
+	}));
+}
+
+function getSpellCheckerLanguages(): MenuItemConstructorOptions[] {
+	const availableLanguages = getSpellCheckerLanguageOptions();
+	const languageItem: MenuItemConstructorOptions[] = [];
+	let languagesChecked = config.get('spellCheckerLanguages');
+	languagesChecked = languagesChecked.filter(language => availableLanguages.some(({code}) => code === language));
+
+	for (const {code, label} of availableLanguages) {
 		languageItem.push(
 			{
-				label: languageToCode.get(language) ?? languageToCode.get(language.split('-')[0]) ?? language,
+				label,
 				type: 'checkbox',
-				checked: languagesChecked.includes(language),
+				checked: languagesChecked.includes(code),
 				click() {
-					const index = languagesChecked.indexOf(language);
+					const index = languagesChecked.indexOf(code);
 					if (index > -1) {
 						// Remove language
 						languagesChecked.splice(index, 1);
 						config.set('spellCheckerLanguages', languagesChecked);
 					} else {
 						// Add language
-						languagesChecked = [...languagesChecked, language];
+						languagesChecked = [...languagesChecked, code];
 						config.set('spellCheckerLanguages', languagesChecked);
 					}
 
