@@ -2,9 +2,14 @@
 	const notifications = new Map<number, Notification>();
 
 	// Handle events sent from the browser process
-	window.addEventListener('message', ({data: {type, data}}) => {
-		if (type === 'notification-callback') {
-			const {callbackName, id}: NotificationCallback = data;
+	window.addEventListener('message', event => {
+		if (event.source !== window || !event.data || typeof event.data !== 'object') {
+			return;
+		}
+
+		const {type, data} = event.data as {type?: string; data?: unknown};
+		if (type === 'notification-callback' && data && typeof data === 'object') {
+			const {callbackName, id} = data as NotificationCallback;
 			const notification = notifications.get(id);
 
 			if (!notification) {
@@ -20,8 +25,8 @@
 			}
 		}
 
-		if (type === 'notification-reply-callback') {
-			const {callbackName, id, previousConversation, reply}: NotificationReplyCallback = data;
+		if (type === 'notification-reply-callback' && data && typeof data === 'object') {
+			const {callbackName, id, previousConversation, reply} = data as NotificationReplyCallback;
 			const notification = notifications.get(id);
 
 			if (!notification) {
@@ -43,15 +48,16 @@
 		class {
 			private readonly _id: number;
 
-			constructor(title: string, options: NotificationOptions) {
+			constructor(title: string, options: NotificationOptions = {}) {
 				// According to https://github.com/sindresorhus/caprine/pull/637, the Notification
 				// constructor can be called with non-string title and body.
 				let {body} = options;
-				const bodyProperties = (body as any).props;
-				body = bodyProperties ? bodyProperties.content[0] : options.body;
+				const bodyProperties = (body as any)?.props;
+				body = bodyProperties ? bodyProperties.content[0] : (options.body ?? '');
 
-				const titleProperties = (title as any).props;
+				const titleProperties = (title as any)?.props;
 				title = titleProperties ? titleProperties.content[0] : title;
+				title = String(title ?? '');
 
 				this._id = counter++;
 
@@ -76,6 +82,8 @@
 		},
 		notification,
 	);
+	Object.setPrototypeOf(augmentedNotification, notification);
+	Object.setPrototypeOf(augmentedNotification.prototype, notification.prototype);
 
-	Object.assign(window, {notification: augmentedNotification});
+	Object.assign(window, {Notification: augmentedNotification});
 })(window, Notification);

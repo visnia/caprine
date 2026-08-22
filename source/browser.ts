@@ -8,6 +8,8 @@ import {toggleVideoAutoplay} from './autoplay';
 import {sendConversationList} from './browser/conversation-list';
 import {IToggleSounds} from './types';
 
+type ThemeSource = typeof nativeTheme.themeSource;
+
 async function withMenu(
 	menuButtonElement: HTMLElement,
 	callback: () => Promise<void> | void,
@@ -76,6 +78,15 @@ async function selectMenuItem(itemNumber: number): Promise<void> {
 	if (selector) {
 		selector.click();
 	}
+}
+
+async function selectConversationMenuItem(iconSelector: string): Promise<void> {
+	await elementReady(selectors.conversationMenuSelectorNewDesign, {stopOnDomReady: false});
+
+	const icon = document.querySelector(
+		`${selectors.conversationMenuSelectorNewDesign} ${iconSelector}`,
+	);
+	icon?.closest<HTMLElement>('[role=menuitem]')?.click();
 }
 
 async function selectOtherListViews(itemNumber: number): Promise<void> {
@@ -294,74 +305,19 @@ ipc.answerMain('reload', () => {
 });
 
 async function setTheme(): Promise<void> {
-	type ThemeSource = typeof nativeTheme.themeSource;
 	const theme = await ipc.callMain<undefined, ThemeSource>('get-config-theme');
-	nativeTheme.themeSource = theme;
-	setThemeElement(document.documentElement);
+
+	if (nativeTheme.themeSource !== theme) {
+		nativeTheme.themeSource = theme;
+	}
+
 	updateVibrancy();
 }
 
-function setThemeElement(element: HTMLElement): void {
-	const useDarkColors = Boolean(nativeTheme.shouldUseDarkColors);
-	element.classList.toggle('dark-mode', useDarkColors);
-	element.classList.toggle('light-mode', !useDarkColors);
-	element.classList.toggle('__fb-dark-mode', useDarkColors);
-	element.classList.toggle('__fb-light-mode', !useDarkColors);
-	removeThemeClasses(useDarkColors);
-}
-
-function removeThemeClasses(useDarkColors: boolean): void {
-	// TODO: Workaround for Facebooks buggy frontend
-	// The ui sometimes hardcodes ligth mode classes in the ui. This removes them so the class
-	// in the root element would be used.
-	const className = useDarkColors ? '__fb-light-mode' : '__fb-dark-mode';
-	for (const element of document.querySelectorAll(`.${className}`)) {
-		element.classList.remove(className);
-	}
-}
-
-async function observeTheme(): Promise<void> {
-	/* Main document's class list */
-	const observer = new MutationObserver((records: MutationRecord[]) => {
-		// Find records that had class attribute changed
-		const classRecords = records.filter(record => record.type === 'attributes' && record.attributeName === 'class');
-		// Check if dark mode classes exists
-		const isDark = classRecords.some(record => {
-			const {classList} = (record.target as HTMLElement);
-			return classList.contains('dark-mode') && classList.contains('__fb-dark-mode');
-		});
-		// If config and class list don't match, update class list
-		if (nativeTheme.shouldUseDarkColors !== isDark) {
-			setTheme();
-		}
+function observeTheme(): void {
+	nativeTheme.on('updated', () => {
+		void updateVibrancy();
 	});
-
-	observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
-
-	/* Added nodes (dialogs, etc.) */
-	const observerNew = new MutationObserver((records: MutationRecord[]) => {
-		const nodeRecords = records.filter(record => record.addedNodes.length > 0);
-		for (const nodeRecord of nodeRecords) {
-			for (const newNode of nodeRecord.addedNodes) {
-				const {classList} = (newNode as HTMLElement);
-				const isLight = classList.contains('light-mode') || classList.contains('__fb-light-mode');
-				if (nativeTheme.shouldUseDarkColors === isLight) {
-					setThemeElement(newNode as HTMLElement);
-				}
-			}
-		}
-	});
-
-	/* Observe only elements where new nodes may need dark mode */
-	const menuElements = await elementReady('.j83agx80.cbu4d94t.l9j0dhe7.jgljxmt5.be9z9djy > div:nth-of-type(2) > div', {stopOnDomReady: false});
-	if (menuElements) {
-		observerNew.observe(menuElements, {childList: true});
-	}
-
-	const modalElements = await elementReady(selectors.preferencesSelector, {stopOnDomReady: false});
-	if (modalElements) {
-		observerNew.observe(modalElements, {childList: true});
-	}
 }
 
 async function setPrivateMode(): Promise<void> {
@@ -538,6 +494,11 @@ async function jumpToConversation(key: number): Promise<void> {
 	await selectConversation(index);
 }
 
+function getConversationEntries(list: Element): HTMLElement[] {
+	return [...list.querySelectorAll<HTMLElement>('[role=row]')]
+		.filter(element => Boolean(element.querySelector('[role=link]')));
+}
+
 // Focus on the conversation with the given index
 async function selectConversation(index: number): Promise<void> {
 	const list = await elementReady(selectors.conversationList, {stopOnDomReady: false});
@@ -547,14 +508,14 @@ async function selectConversation(index: number): Promise<void> {
 		return;
 	}
 
-	const conversation = list.children[index];
+	const conversation = getConversationEntries(list)[index];
 
 	if (!conversation) {
 		console.error('Could not find conversation', index);
 		return;
 	}
 
-	conversation.querySelector<HTMLLegendElement>('[role=link]')!.click();
+	conversation.querySelector<HTMLElement>('[role=link]')!.click();
 }
 
 function selectedConversationIndex(offset = 0): number {
@@ -564,26 +525,42 @@ function selectedConversationIndex(offset = 0): number {
 		return -1;
 	}
 
-	const newSelected = selected.closest(`${selectors.conversationList} > div`)!;
+	const conversationList = document.querySelector(selectors.conversationList);
+	const newSelected = selected.closest<HTMLElement>('[role=row]');
+	if (!conversationList || !newSelected || !conversationList.contains(newSelected)) {
+		return -1;
+	}
 
-	const list = [...newSelected.parentNode!.children];
-	const index = list.indexOf(newSelected) + offset;
+	const list = getConversationEntries(conversationList);
+	const selectedIndex = list.indexOf(newSelected);
+	if (selectedIndex === -1 || list.length === 0) {
+		return -1;
+	}
+
+	const index = selectedIndex + offset;
 
 	return ((index % list.length) + list.length) % list.length;
 }
 
 async function setZoom(zoomFactor: number): Promise<void> {
 	const node = document.querySelector<HTMLElement>('#zoomFactor')!;
-	node.textContent = `${selectors.conversationSelector} {zoom: ${zoomFactor} !important}`;
+	node.textContent = `
+		${selectors.conversationList} {zoom: ${zoomFactor} !important;}
+		${selectors.conversationSelector} {zoom: ${zoomFactor} !important;}
+	`;
 	await ipc.callMain<number, void>('set-config-zoomFactor', zoomFactor);
 }
 
-async function withConversationMenu(callback: () => void): Promise<void> {
-	// eslint-disable-next-line @typescript-eslint/ban-types
-	let menuButton: HTMLElement | null = null;
-	const conversation = document.querySelector<HTMLElement>(selectors.selectedConversation)!.closest(`${selectors.conversationList} > div`);
+async function withConversationMenu(callback: () => Promise<void> | void): Promise<void> {
+	const selectedConversation = document.querySelector<HTMLElement>(selectors.selectedConversation);
+	const conversation = selectedConversation?.closest<HTMLElement>('[role=row]');
+	const conversationList = document.querySelector(selectors.conversationList);
 
-	menuButton = conversation?.querySelector('[aria-label=Menu][role=button]') ?? null;
+	if (!conversation || !conversationList?.contains(conversation)) {
+		return;
+	}
+
+	const menuButton = conversation.querySelector<HTMLElement>('[role=button][aria-haspopup=menu]');
 
 	if (menuButton) {
 		await withMenu(menuButton, callback);
@@ -591,59 +568,20 @@ async function withConversationMenu(callback: () => void): Promise<void> {
 }
 
 async function openMuteModal(): Promise<void> {
-	await withConversationMenu(() => {
-		selectMenuItem(2);
+	await withConversationMenu(async () => {
+		await selectConversationMenuItem(selectors.conversationMenuMuteIcon);
 	});
 }
 
-/*
-These functions assume:
-- There is a selected conversation.
-- That the conversation already has its conversation menu open.
-
-In other words, you should only use this function within a callback that is provided to `withConversationMenu()`, because `withConversationMenu()` makes sure to have the conversation menu open before executing the callback and closes the conversation menu afterwards.
-*/
-function isSelectedConversationGroup(): boolean {
-	// Individual conversations include an entry for "View Profile", which is type `a`
-	return !document.querySelector<HTMLElement>(`${selectors.conversationMenuSelectorNewDesign} a[role=menuitem]`);
-}
-
-function isSelectedConversationMetaAI(): boolean {
-	// Meta AI menu only has 1 separator of type `hr`
-	return !document.querySelector<HTMLElement>(`${selectors.conversationMenuSelectorNewDesign} hr:nth-of-type(2)`);
-}
-
 async function archiveSelectedConversation(): Promise<void> {
-	await withConversationMenu(() => {
-		const [isGroup, isNotGroup, isMetaAI] = [-4, -3, -2];
-
-		let archiveMenuIndex;
-		if (isSelectedConversationMetaAI()) {
-			archiveMenuIndex = isMetaAI;
-		} else if (isSelectedConversationGroup()) {
-			archiveMenuIndex = isGroup;
-		} else {
-			archiveMenuIndex = isNotGroup;
-		}
-
-		selectMenuItem(archiveMenuIndex);
+	await withConversationMenu(async () => {
+		await selectConversationMenuItem(selectors.conversationMenuArchiveIcon);
 	});
 }
 
 async function deleteSelectedConversation(): Promise<void> {
-	await withConversationMenu(() => {
-		const [isGroup, isNotGroup, isMetaAI] = [-3, -2, -1];
-
-		let deleteMenuIndex;
-		if (isSelectedConversationMetaAI()) {
-			deleteMenuIndex = isMetaAI;
-		} else if (isSelectedConversationGroup()) {
-			deleteMenuIndex = isGroup;
-		} else {
-			deleteMenuIndex = isNotGroup;
-		}
-
-		selectMenuItem(deleteMenuIndex);
+	await withConversationMenu(async () => {
+		await selectConversationMenuItem(selectors.conversationMenuDeleteIcon);
 	});
 }
 
@@ -741,21 +679,54 @@ async function observeAutoscroll(): Promise<void> {
 	conversationObserver.observe(mainElement, {childList: true});
 }
 
-async function observeThemeBugs(): Promise<void> {
-	const rootObserver = new MutationObserver((record: MutationRecord[]) => {
-		const newNodes: MutationRecord[] = record
-			.filter(record => record.addedNodes.length > 0 || record.removedNodes.length > 0);
-
-		if (newNodes) {
-			removeThemeClasses(Boolean(nativeTheme.shouldUseDarkColors));
-		}
-	});
-
-	rootObserver.observe(document.documentElement, {childList: true, subtree: true});
-}
-
 // Listen for emoji element dom insertion
 document.addEventListener('animationstart', insertionListener, false);
+
+function addMacosDragBar(): void {
+	if (!is.macos) {
+		return;
+	}
+
+	const dragBarHeight = 24;
+	const dragBar = document.createElement('div');
+	dragBar.id = 'caprine-drag-bar';
+	dragBar.style.position = 'fixed';
+	dragBar.style.inset = '0 0 auto';
+	dragBar.style.height = `${dragBarHeight}px`;
+	dragBar.style.zIndex = '99999';
+	dragBar.style.setProperty('-webkit-app-region', 'drag');
+	document.body.append(dragBar);
+
+	const interactiveSelector = 'button, a[href], input, select, textarea, [role=button], [role=link], [role=search], [contenteditable=true]';
+	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+	let lastMouseX = 0;
+	let lastMouseY = 0;
+
+	document.addEventListener('mousemove', event => {
+		lastMouseX = event.clientX;
+		lastMouseY = event.clientY;
+
+		if (debounceTimer) {
+			return;
+		}
+
+		debounceTimer = setTimeout(() => {
+			debounceTimer = undefined;
+
+			if (lastMouseY >= dragBarHeight) {
+				dragBar.style.pointerEvents = '';
+				return;
+			}
+
+			dragBar.style.pointerEvents = 'none';
+			const target = document.elementFromPoint(lastMouseX, lastMouseY);
+
+			if (!target?.closest(interactiveSelector)) {
+				dragBar.style.pointerEvents = '';
+			}
+		}, 100);
+	}, {passive: true});
+}
 
 // Inject a global style node to maintain custom appearance after conversation change or startup
 document.addEventListener('DOMContentLoaded', async () => {
@@ -773,9 +744,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 	// Restore sidebar view state to what is was set before quitting
 	updateSidebar();
 
-	// Activate Dark Mode if it was set before quitting
+	// Apply the preferred color scheme to Electron. Messenger handles its own theme.
 	setTheme();
-	// Observe for dark mode changes
+	// Keep native effects in sync with system theme changes.
 	observeTheme();
 
 	// Activate Private Mode if it was set before quitting
@@ -786,20 +757,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 		await updateDoNotDisturb();
 	}
 
-	// Prevent flash of white on startup when in dark mode
-	// TODO: find a CSS-only solution
-	if (!is.macos && nativeTheme.shouldUseDarkColors) {
-		document.documentElement.style.backgroundColor = '#1e1e1e';
-	}
-
 	// Disable autoplay if set in settings
 	toggleVideoAutoplay();
 
 	// Hook auto-scroll observer
 	observeAutoscroll();
 
-	// Hook broken dark mode observer
-	observeThemeBugs();
+	addMacosDragBar();
 });
 
 // Handle title bar double-click.
@@ -815,6 +779,53 @@ window.addEventListener('dblclick', (event: Event) => {
 }, {
 	passive: true,
 });
+
+function isInternalChatUrl(url: URL): boolean {
+	return url.hostname === location.hostname
+		|| url.hostname.endsWith('.messenger.com')
+		|| url.hostname === 'work.facebook.com'
+		|| url.hostname === 'work.workplace.com'
+		|| url.hostname.endsWith('.workplace.com');
+}
+
+// Messenger sometimes handles chat links entirely in its renderer, bypassing
+// Electron's navigation handlers. Keep internal Messenger links in the app and
+// send actual external links to the user's default browser.
+document.addEventListener('click', event => {
+	const target = event.target as HTMLElement;
+	const link = target.closest<HTMLAnchorElement>('a[href]');
+	const mainElement = document.querySelector('[role=main]');
+
+	if (
+		location.pathname.startsWith('/login')
+		|| !link
+		|| !mainElement?.contains(link)
+		|| link.hasAttribute('download')
+	) {
+		return;
+	}
+
+	const href = link.getAttribute('href');
+	if (!href || href.startsWith('#')) {
+		return;
+	}
+
+	let url: URL;
+	try {
+		url = new URL(href, location.href);
+	} catch {
+		return;
+	}
+
+	if (!['http:', 'https:'].includes(url.protocol) || isInternalChatUrl(url)) {
+		return;
+	}
+
+	event.preventDefault();
+	event.stopPropagation();
+	event.stopImmediatePropagation();
+	void ipc.callMain('open-external', url.href);
+}, {capture: true});
 
 window.addEventListener('load', async () => {
 	if (location.pathname.startsWith('/login')) {
@@ -876,10 +887,27 @@ window.addEventListener('message', async ({data: {type, data}}) => {
 	}
 });
 
-function showNotification({id, title, body, icon, silent}: NotificationEvent): void {
+function showNotification({id, href, title, body, icon, silent}: NotificationEvent): void {
+	let sent = false;
+	const sendNotification = (iconData: string): void => {
+		if (sent) {
+			return;
+		}
+
+		sent = true;
+		ipc.callMain('notification', {
+			id,
+			href,
+			source: 'messenger',
+			title,
+			body,
+			icon: iconData,
+			silent,
+		});
+	};
+
 	const image = new Image();
 	image.crossOrigin = 'anonymous';
-	image.src = icon;
 
 	image.addEventListener('load', () => {
 		const canvas = document.createElement('canvas');
@@ -890,14 +918,18 @@ function showNotification({id, title, body, icon, silent}: NotificationEvent): v
 
 		context.drawImage(image, 0, 0, image.width, image.height);
 
-		ipc.callMain('notification', {
-			id,
-			title,
-			body,
-			icon: canvas.toDataURL(),
-			silent,
-		});
-	});
+		sendNotification(canvas.toDataURL());
+	}, {once: true});
+
+	image.addEventListener('error', () => {
+		sendNotification('');
+	}, {once: true});
+
+	if (icon) {
+		image.src = icon;
+	} else {
+		sendNotification('');
+	}
 }
 
 async function sendReply(message: string): Promise<void> {
@@ -942,8 +974,23 @@ function insertMessageText(text: string, inputField: HTMLElement): void {
 	document.execCommand('insertText', false, text);
 }
 
-ipc.answerMain('notification-callback', (data: unknown) => {
+ipc.answerMain('notification-callback', async (data: NotificationCallback) => {
 	window.postMessage({type: 'notification-callback', data}, '*');
+
+	if (data.href) {
+		const list = await elementReady(selectors.conversationList, {stopOnDomReady: false});
+		const links = list ? [...list.querySelectorAll<HTMLElement>('[role=link]')] : [];
+		const conversationLink = links
+			.find(link => {
+				const href = link.getAttribute('href');
+				if (!href) {
+					return false;
+				}
+
+				return new URL(href, location.href).href === new URL(data.href!, location.href).href;
+			});
+		conversationLink?.click();
+	}
 });
 
 ipc.answerMain('notification-reply-callback', async (data: any) => {

@@ -6,7 +6,7 @@ import {
 	BrowserWindow,
 	MenuItemConstructorOptions,
 } from 'electron';
-import {is} from 'electron-util';
+import {fixPathForAsarUnpack, is} from 'electron-util';
 import config from './config';
 import {toggleMenuBarMode} from './menu-bar-mode';
 
@@ -20,6 +20,8 @@ export default {
 		if (tray) {
 			return;
 		}
+
+		previousMessageCount = -1;
 
 		function toggleWindow(): void {
 			if (win.isVisible()) {
@@ -56,9 +58,9 @@ export default {
 						config.set('showDockIcon', menuItem.checked);
 
 						if (menuItem.checked) {
-							app.dock.show();
+							app.dock?.show();
 						} else {
-							app.dock.hide();
+							app.dock?.hide();
 						}
 
 						const dockMenuItem = contextMenu.getMenuItemById('dockMenu')!;
@@ -158,7 +160,7 @@ function getIconPath(hasUnreadMessages: boolean): string {
 		? getMacOSIconName(hasUnreadMessages)
 		: getNonMacOSIconName(hasUnreadMessages);
 
-	return path.join(__dirname, '..', `static/${icon}`);
+	return fixPathForAsarUnpack(path.join(__dirname, '..', `static/${icon}`));
 }
 
 function getNonMacOSIconName(hasUnreadMessages: boolean): string {

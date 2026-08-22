@@ -17,7 +17,7 @@ export function getWindow(): BrowserWindow {
 export function sendAction<T>(action: string, arguments_?: T): void {
 	const win = getWindow();
 
-	if (is.macos) {
+	if ((is.macos || is.windows) && win.isMinimized()) {
 		win.restore();
 	}
 
@@ -26,6 +26,28 @@ export function sendAction<T>(action: string, arguments_?: T): void {
 
 export async function sendBackgroundAction<T, ReturnValue>(action: string, arguments_?: T): Promise<ReturnValue> {
 	return ipcMain.callRenderer<T, ReturnValue>(getWindow(), action, arguments_);
+}
+
+export function showAndFocusWindow(win: BrowserWindow): void {
+	if (win.isDestroyed()) {
+		return;
+	}
+
+	if (win.isMinimized()) {
+		win.restore();
+	}
+
+	if (!win.isVisible()) {
+		win.show();
+	}
+
+	if (is.windows) {
+		const wasAlwaysOnTop = win.isAlwaysOnTop();
+		win.setAlwaysOnTop(true);
+		win.setAlwaysOnTop(wasAlwaysOnTop);
+	}
+
+	win.focus();
 }
 
 export function showRestartDialog(message: string): void {
@@ -54,7 +76,7 @@ export const messengerDomain = config.get('useWorkChat') ? 'facebook.com' : 'mes
 export function stripTrackingFromUrl(url: string): string {
 	const trackingUrlPrefix = `https://l.${messengerDomain}/l.php`;
 	if (url.startsWith(trackingUrlPrefix)) {
-		url = new URL(url).searchParams.get('u')!;
+		return new URL(url).searchParams.get('u') ?? url;
 	}
 
 	return url;

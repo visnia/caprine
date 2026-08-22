@@ -1,6 +1,5 @@
 import {ipcRenderer as ipc} from 'electron-better-ipc';
 import elementReady from 'element-ready';
-import {isNull} from 'lodash';
 import selectors from './selectors';
 
 const icon = {
@@ -14,6 +13,10 @@ const padding = {
 	bottom: 3,
 	left: 0,
 };
+
+const lastNotifiedMessage = new Map<string, {content: string; timestamp: number}>();
+const conversationPreviews = new Map<string, string>();
+const duplicateNotificationWindow = 30_000;
 
 function drawIcon(size: number, img?: HTMLImageElement): HTMLCanvasElement {
 	const canvas = document.createElement('canvas');
@@ -75,26 +78,15 @@ async function createIcons(element: HTMLElement, url: string): Promise<void> {
 }
 
 async function discoverIcons(element: HTMLElement): Promise<void> {
-	if (element) {
-		return createIcons(element, element.getAttribute('src')!);
+	const url = element.getAttribute('src');
+	if (url) {
+		await createIcons(element, url);
 	}
-
-	console.warn('Could not discover profile picture. Falling back to default image.');
-
-	// Fall back to messenger favicon
-	const messengerIcon = document.querySelector('link[rel~="icon"]');
-
-	if (messengerIcon) {
-		return createIcons(element, messengerIcon.getAttribute('href')!);
-	}
-
-	// Fall back to facebook favicon
-	return createIcons(element, 'https://facebook.com/favicon.ico');
 }
 
-async function getIcon(element: HTMLElement, unread: boolean): Promise<string> {
-	if (element === null) {
-		return icon.read;
+async function getIcon(element: HTMLElement | undefined, unread: boolean): Promise<string> {
+	if (!element) {
+		return '';
 	}
 
 	if (!element.getAttribute(icon.read)) {
@@ -104,23 +96,27 @@ async function getIcon(element: HTMLElement, unread: boolean): Promise<string> {
 	return element.getAttribute(unread ? icon.unread : icon.read)!;
 }
 
-async function getLabel(element: HTMLElement): Promise<string> {
-	if (isNull(element)) {
+async function getLabel(element: HTMLElement | undefined): Promise<string> {
+	if (!element) {
 		return '';
 	}
 
-	const emojis: HTMLElement[] = [];
-	if (element !== null) {
-		for (const elementCurrent of element.children) {
-			emojis.push(elementCurrent as HTMLElement);
-		}
+	const textLabel = element.textContent?.trim();
+	if (textLabel) {
+		return textLabel;
 	}
 
-	for (const emoji of emojis) {
-		emoji.outerHTML = emoji.querySelector('img')?.getAttribute('alt') ?? '';
+	const ariaLabel = element.getAttribute('aria-label')?.trim();
+	if (ariaLabel) {
+		return ariaLabel;
 	}
 
-	return element.textContent ?? '';
+	const clone = element.cloneNode(true) as HTMLElement;
+	for (const image of clone.querySelectorAll('img')) {
+		image.replaceWith(document.createTextNode(image.getAttribute('alt') ?? ''));
+	}
+
+	return clone.textContent?.trim() ?? '';
 }
 
 async function createConversationNewDesign(element: HTMLElement): Promise<Conversation> {
@@ -130,13 +126,21 @@ async function createConversationNewDesign(element: HTMLElement): Promise<Conver
 	const muted = Boolean(element.querySelector(selectors.muteIconNewDesign));
 	*/
 
-	conversation.selected = Boolean(element.querySelector('[role=row] [role=link] > div:only-child'));
-	conversation.unread = Boolean(element.querySelector('[aria-label="Mark as Read"]'));
+	conversation.selected = Boolean(element.querySelector('[role=link][aria-current=page]'));
+	conversation.unread = isUnreadConversation(element);
 
-	const unparsedLabel = element.querySelector<HTMLElement>('.a8c37x1j.ni8dbmo4.stjgntxs.l9j0dhe7 > span > span')!;
+	let unparsedLabel: HTMLElement | undefined;
+	for (const selector of selectors.conversationLabelSelectors) {
+		const candidate = element.querySelector<HTMLElement>(selector);
+		if (candidate) {
+			unparsedLabel = candidate;
+			break;
+		}
+	}
+
 	conversation.label = await getLabel(unparsedLabel);
 
-	const iconElement = element.querySelector<HTMLElement>('img')!;
+	const iconElement = element.querySelector<HTMLElement>('img') ?? undefined;
 	conversation.icon = await getIcon(iconElement, conversation.unread);
 
 	return conversation as Conversation;
@@ -154,12 +158,11 @@ async function createConversationList(): Promise<Conversation[]> {
 		return [];
 	}
 
-	const elements: HTMLElement[] = [...list.children] as HTMLElement[];
+	const elements = [...list.querySelectorAll<HTMLElement>('[role=row]')]
+		.filter(element => Boolean(element.querySelector('[role=link][href]')));
 
-	// Remove last element from childer list
-	elements.splice(-1, 1);
-
-	const conversations: Conversation[] = await Promise.all(elements.map(async element => createConversationNewDesign(element)));
+	const conversationResults = await Promise.all(elements.map(async element => createConversationNewDesign(element)));
+	const conversations = conversationResults.filter(conversation => Boolean(conversation.label));
 
 	return conversations;
 }
@@ -181,109 +184,208 @@ function generateStringFromNode(element: Element): string | undefined {
 			emojiString = '👍';
 		}
 
-		image.parentElement?.replaceWith(document.createTextNode(emojiString));
+		image.replaceWith(document.createTextNode(emojiString));
 	}
 
 	return cloneElement.textContent ?? undefined;
 }
 
-function countUnread(mutationsList: MutationRecord[]): void {
-	const alreadyChecked: string[] = [];
+function isConversationRow(element: Element): element is HTMLElement {
+	return element.matches('[role=row]')
+		&& Boolean(element.closest('[role=navigation] [role=grid]'))
+		&& Boolean(element.querySelector('[role=link][href]'));
+}
 
-	const unreadMutations = mutationsList.filter(mutation =>
-		// When a conversations "becomes unread".
-		(
-			mutation.type === 'childList'
-			&& mutation.addedNodes.length > 0
-			&& ((mutation.addedNodes[0] as Element).className === selectors.conversationSidebarUnreadDot)
-		)
-		// When text is received
-		|| (
-			mutation.type === 'characterData'
-			// Make sure the text corresponds to a conversation
-			&& mutation.target.parentElement?.parentElement?.parentElement?.className === selectors.conversationSidebarTextParent
-		)
-		// When an emoji is received, node(s) are added
-		|| (
-			mutation.type === 'childList'
-			// Make sure the mutation corresponds to a conversation
-			&& mutation.target.parentElement?.parentElement?.className === selectors.conversationSidebarTextParent
-		)
-		// Emoji change
-		|| (
-			mutation.type === 'attributes'
-			&& mutation.target.parentElement?.parentElement?.parentElement?.parentElement?.className === selectors.conversationSidebarTextParent
-		));
+function isUnreadConversation(element: Element): boolean {
+	const unreadDotSelector = '.' + selectors.conversationSidebarUnreadDot.replaceAll(' ', '.');
+	if (
+		element.querySelector(unreadDotSelector)
+		?? element.querySelector('[aria-label="Mark as Read"]')
+	) {
+		return true;
+	}
 
-	// Check latest mutation first
-	for (const mutation of unreadMutations.reverse()) {
-		const current = (mutation.target.parentElement as Element).closest(selectors.conversationSidebarSelector)!;
+	const textElements = element.querySelectorAll<HTMLElement>(
+		`${selectors.conversationSidebarTextSelector}, [role=link] span`,
+	);
 
-		const href = current.closest('[role="link"]')?.getAttribute('href');
+	return [...textElements].some(textElement => {
+		if (!textElement.textContent?.trim() || textElement.children.length > 0) {
+			return false;
+		}
 
-		if (!href) {
+		const {fontWeight} = getComputedStyle(textElement);
+		return fontWeight === 'bold' || Number.parseInt(fontWeight, 10) >= 600;
+	});
+}
+
+function getConversationText(element: Element): string[] {
+	const preferredElements = [...element.querySelectorAll(selectors.conversationSidebarTextSelector)];
+	const link = element.querySelector('[role=link]') ?? element;
+	const textElements = preferredElements.length >= 2
+		? preferredElements
+		: [...link.querySelectorAll('span')].filter(textElement => textElement.children.length === 0);
+	const result: string[] = [];
+
+	for (const textElement of textElements) {
+		const text = generateStringFromNode(textElement)?.trim();
+		if (text && !result.includes(text)) {
+			result.push(text);
+		}
+	}
+
+	return result;
+}
+
+function getConversationRows(mutationsList: MutationRecord[]): HTMLElement[] {
+	const rows = new Set<HTMLElement>();
+
+	const addRow = (node: Node): void => {
+		const element = node instanceof Element ? node : node.parentElement;
+		const closestRow = element?.closest('[role=row]');
+		if (closestRow && isConversationRow(closestRow)) {
+			rows.add(closestRow);
+		}
+
+		if (element instanceof Element) {
+			for (const row of element.querySelectorAll('[role=row]')) {
+				if (isConversationRow(row)) {
+					rows.add(row);
+				}
+			}
+		}
+	};
+
+	for (const mutation of mutationsList) {
+		addRow(mutation.target);
+		for (const node of mutation.addedNodes) {
+			addRow(node);
+		}
+	}
+
+	return [...rows];
+}
+
+function rememberConversationPreview(element: Element): {
+	href: string;
+	titleText: string;
+	bodyText: string;
+	changed: boolean;
+} | undefined {
+	const href = element.querySelector('[role=link][href]')?.getAttribute('href');
+	if (!href) {
+		return undefined;
+	}
+
+	const [titleText = '', bodyText = ''] = getConversationText(element);
+	const previousBodyText = conversationPreviews.get(href);
+	conversationPreviews.set(href, bodyText);
+
+	return {
+		href,
+		titleText,
+		bodyText,
+		changed: previousBodyText !== undefined && previousBodyText !== bodyText,
+	};
+}
+
+function snapshotConversationPreviews(sidebar: Element): void {
+	for (const row of sidebar.querySelectorAll('[role=row]')) {
+		if (isConversationRow(row)) {
+			rememberConversationPreview(row);
+		}
+	}
+}
+
+function notifyUnreadConversations(mutationsList: MutationRecord[]): void {
+	for (const current of getConversationRows(mutationsList)) {
+		const preview = rememberConversationPreview(current);
+		if (!preview?.changed || !preview.bodyText || !preview.titleText) {
 			continue;
 		}
 
-		// It is possible to have multiple mutations for the same conversation, but we only want one notification.
-		// So if the current conversation has already been checked, continue.
-		// Additionally if the conversation is not unread, then also continue.
-		if (alreadyChecked.includes(href) || !current.querySelector('.' + selectors.conversationSidebarUnreadDot.replaceAll(/ /, '.'))) {
+		const {href, titleText, bodyText} = preview;
+
+		// The preview must both change and be unread. Messenger's own Notification
+		// event remains the primary signal; this observer is only a conservative fallback.
+		if (!isUnreadConversation(current)) {
+			lastNotifiedMessage.delete(href);
 			continue;
 		}
 
-		alreadyChecked.push(href);
-
-		// Get the image data URI from the parent of the author/text
-		const imgUrl = current.querySelector('img')?.dataset.caprineIcon;
-		const textOptions = current.querySelectorAll(selectors.conversationSidebarTextSelector);
-		// Get the author and text of the new message
-		const titleTextNode = textOptions[0];
-		const bodyTextNode = textOptions[1];
-
-		const titleText = generateStringFromNode(titleTextNode);
-		const bodyText = generateStringFromNode(bodyTextNode);
-
-		if (!bodyText || !titleText || !imgUrl) {
+		if (current.querySelector(selectors.muteIconNewDesign)) {
 			continue;
 		}
 
-		// Send a notification
+		const now = Date.now();
+		const previousNotification = lastNotifiedMessage.get(href);
+		if (
+			previousNotification?.content === bodyText
+			&& (now - previousNotification.timestamp) < duplicateNotificationWindow
+		) {
+			continue;
+		}
+
+		lastNotifiedMessage.set(href, {content: bodyText, timestamp: now});
+		const id = [...href].reduce((hash, character) => ((hash * 31) + character.codePointAt(0)!) % 2_147_483_647, 0);
+
 		ipc.callMain('notification', {
-			id: 0,
+			id,
+			href,
+			source: 'conversation-list',
 			title: titleText,
 			body: bodyText,
-			icon: imgUrl,
+			icon: current.querySelector('img')?.getAttribute(icon.read) ?? '',
 			silent: false,
 		});
 	}
 }
 
-async function updateTrayIcon(): Promise<void> {
-	let messageCount = 0;
-
-	await elementReady(selectors.chatsIcon, {stopOnDomReady: false});
-
-	// Count unread messages in Chats, Marketplace, etc.
-	for (const element of document.querySelectorAll<HTMLElement>(selectors.chatsIcon)) {
-		// Extract messageNumber from ariaLabel
-		const messageNumber = element?.ariaLabel?.match(/\d+/g);
-
-		if (messageNumber) {
-			messageCount += Number.parseInt(messageNumber[0], 10);
-		}
+function parseUnreadCount(value: string | undefined): number | undefined {
+	const match = value?.match(/\d[\d\s,.]*/);
+	if (!match) {
+		return undefined;
 	}
 
-	ipc.callMain('update-tray-icon', messageCount);
+	const count = Number.parseInt(match[0].replaceAll(/\D/g, ''), 10);
+	return Number.isNaN(count) ? undefined : count;
 }
+
+function getUnreadCount(): number {
+	const titleCount = parseUnreadCount(/^\(([^)]+)\)/.exec(document.title)?.[1]);
+	if (titleCount !== undefined) {
+		return titleCount;
+	}
+
+	const navigationCounts = [...document.querySelectorAll<HTMLElement>('[role=navigation] [aria-label]')]
+		.filter(element => !element.closest('[role=grid]'))
+		.map(element => parseUnreadCount(element.ariaLabel ?? undefined))
+		.filter((count): count is number => count !== undefined);
+	if (navigationCounts.length > 0) {
+		return Math.max(...navigationCounts);
+	}
+
+	return [...document.querySelectorAll<HTMLElement>('[role=navigation] [role=grid] [role=row]')]
+		.filter(element => isUnreadConversation(element)).length;
+}
+
+async function updateTrayIcon(): Promise<void> {
+	ipc.callMain('update-tray-icon', getUnreadCount());
+}
+
+ipc.answerMain('refresh-unread-badge', updateTrayIcon);
 
 window.addEventListener('load', async () => {
 	const sidebar = await elementReady('[role=navigation]:has([role=grid])', {stopOnDomReady: false});
-	const leftSidebar = await elementReady(`${selectors.leftSidebar}:has(${selectors.chatsIcon})`, {stopOnDomReady: false});
 
 	if (sidebar) {
+		snapshotConversationPreviews(sidebar);
+
 		const conversationListObserver = new MutationObserver(async () => sendConversationList());
-		const conversationCountObserver = new MutationObserver(countUnread);
+		const conversationCountObserver = new MutationObserver(async mutationsList => {
+			notifyUnreadConversations(mutationsList);
+			await updateTrayIcon();
+		});
 
 		conversationListObserver.observe(sidebar, {
 			subtree: true,
@@ -297,18 +399,16 @@ window.addEventListener('load', async () => {
 			subtree: true,
 			childList: true,
 			attributes: true,
-			attributeFilter: ['src', 'alt'],
+			attributeFilter: ['src', 'alt', 'class', 'aria-label', 'aria-current'],
 		});
 	}
 
-	if (leftSidebar) {
-		const chatsIconObserver = new MutationObserver(async () => updateTrayIcon());
-
-		chatsIconObserver.observe(leftSidebar, {
-			subtree: true,
-			childList: true,
-			attributes: true,
-			attributeFilter: ['aria-label'],
-		});
+	const titleElement = document.querySelector('title');
+	if (titleElement) {
+		const titleObserver = new MutationObserver(async () => updateTrayIcon());
+		titleObserver.observe(titleElement, {subtree: true, childList: true, characterData: true});
 	}
+
+	await updateTrayIcon();
+	window.setInterval(updateTrayIcon, 2000);
 });

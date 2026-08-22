@@ -270,24 +270,20 @@ Press Command/Ctrl+R in Caprine to see your changes.
 			},
 		},
 		{
-			/* TODO: Fix notifications */
 			label: 'Show Message Preview in Notifications',
 			type: 'checkbox',
-			visible: is.development,
 			checked: config.get('notificationMessagePreview'),
 			click(menuItem) {
 				config.set('notificationMessagePreview', menuItem.checked);
 			},
 		},
 		{
-			/* TODO: Fix notifications */
 			label: 'Mute Notifications',
 			id: 'mute-notifications',
 			type: 'checkbox',
-			visible: is.development,
 			checked: config.get('notificationsMuted'),
-			click() {
-				sendAction('toggle-mute-notifications');
+			click(menuItem) {
+				config.set('notificationsMuted', menuItem.checked);
 			},
 		},
 		{
@@ -299,14 +295,12 @@ Press Command/Ctrl+R in Caprine to see your changes.
 			},
 		},
 		{
-			/* TODO: Fix notification badge */
 			label: 'Show Unread Badge',
 			type: 'checkbox',
-			visible: is.development,
 			checked: config.get('showUnreadBadge'),
-			click() {
-				config.set('showUnreadBadge', !config.get('showUnreadBadge'));
-				sendAction('reload');
+			click(menuItem) {
+				config.set('showUnreadBadge', menuItem.checked);
+				sendAction('refresh-unread-badge');
 			},
 		},
 		{

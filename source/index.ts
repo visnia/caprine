@@ -1,5 +1,6 @@
 import path from 'node:path';
 import {readFileSync, existsSync} from 'node:fs';
+import process from 'node:process';
 import {
 	app,
 	nativeImage,
@@ -28,6 +29,7 @@ import tray from './tray';
 import {
 	sendAction,
 	sendBackgroundAction,
+	showAndFocusWindow,
 	messengerDomain,
 	stripTrackingFromUrl,
 } from './util';
@@ -79,20 +81,47 @@ if (!is.development && config.get('autoUpdate')) {
 let mainWindow: BrowserWindow;
 let isQuitting = false;
 let previousMessageCount = 0;
+let hasInitializedMessageCount = false;
+let badgeUpdateSequence = 0;
 let dockMenu: Menu;
 let isDNDEnabled = false;
+let conversationListReady = false;
+
+function getJumpListConversationIndex(commandLine: readonly string[]): number | undefined {
+	const argument = commandLine.find(value => /^--jump-to-conversation=\d+$/.test(value));
+	if (!argument) {
+		return undefined;
+	}
+
+	const index = Number.parseInt(argument.split('=')[1], 10);
+	return index > 0 ? index : undefined;
+}
+
+let pendingConversationIndex = getJumpListConversationIndex(process.argv);
+
+function openPendingConversation(): void {
+	if (!conversationListReady || pendingConversationIndex === undefined) {
+		return;
+	}
+
+	const index = pendingConversationIndex;
+	pendingConversationIndex = undefined;
+	sendAction('jump-to-conversation', index);
+}
 
 if (!app.requestSingleInstanceLock()) {
 	app.quit();
 }
 
-app.on('second-instance', () => {
+app.on('second-instance', (_event, commandLine) => {
 	if (mainWindow) {
-		if (mainWindow.isMinimized()) {
-			mainWindow.restore();
+		const conversationIndex = getJumpListConversationIndex(commandLine);
+		if (conversationIndex !== undefined) {
+			pendingConversationIndex = conversationIndex;
 		}
 
-		mainWindow.show();
+		showAndFocusWindow(mainWindow);
+		openPendingConversation();
 	}
 });
 
@@ -105,29 +134,33 @@ app.on('ready', () => {
 });
 
 async function updateBadge(messageCount: number): Promise<void> {
+	const updateSequence = ++badgeUpdateSequence;
+	const hasNewMessages = hasInitializedMessageCount && messageCount > previousMessageCount;
+	previousMessageCount = messageCount;
+	hasInitializedMessageCount = true;
+
 	if (!is.windows) {
-		if (config.get('showUnreadBadge') && !isDNDEnabled) {
-			app.badgeCount = messageCount;
-		}
+		app.badgeCount = (config.get('showUnreadBadge') && !isDNDEnabled) ? messageCount : 0;
 
 		if (
 			is.macos
 			&& !isDNDEnabled
 			&& config.get('bounceDockOnMessage')
-			&& previousMessageCount !== messageCount
+			&& hasNewMessages
 		) {
-			app.dock.bounce('informational');
-			previousMessageCount = messageCount;
+			app.dock?.bounce('informational');
 		}
 	}
 
 	if (!is.macos) {
-		if (config.get('showUnreadBadge')) {
-			tray.setBadge(messageCount > 0);
-		}
+		tray.setBadge(config.get('showUnreadBadge') && messageCount > 0);
 
 		if (config.get('flashWindowOnMessage')) {
-			mainWindow.flashFrame(messageCount !== 0);
+			if (hasNewMessages) {
+				mainWindow.flashFrame(true);
+			} else if (messageCount === 0) {
+				mainWindow.flashFrame(false);
+			}
 		}
 	}
 
@@ -138,7 +171,14 @@ async function updateBadge(messageCount: number): Promise<void> {
 			mainWindow.setOverlayIcon(null, '');
 		} else {
 			// Delegate drawing of overlay icon to renderer process
-			updateOverlayIcon(await ipc.callRenderer(mainWindow, 'render-overlay-icon', messageCount));
+			const overlayIcon = await ipc.callRenderer<number, {data: string; text: string}>(
+				mainWindow,
+				'render-overlay-icon',
+				messageCount,
+			);
+			if (updateSequence === badgeUpdateSequence) {
+				updateOverlayIcon(overlayIcon);
+			}
 		}
 	}
 }
@@ -273,7 +313,7 @@ function createMainWindow(): BrowserWindow {
 		y: lastWindowState.y,
 		width: lastWindowState.width,
 		height: lastWindowState.height,
-		icon: is.linux ? caprineIconPath : undefined,
+		icon: is.macos ? undefined : caprineIconPath,
 		minWidth: 400,
 		minHeight: 200,
 		alwaysOnTop: config.get('alwaysOnTop'),
@@ -375,6 +415,36 @@ function createMainWindow(): BrowserWindow {
 		sendAction('zoom-in');
 	});
 
+	mainWindow.webContents.on('before-input-event', (event, input) => {
+		if (input.type !== 'keyDown') {
+			return;
+		}
+
+		let hasZoomModifier = input.modifiers.includes('control');
+		if (is.macos) {
+			hasZoomModifier = input.modifiers.includes('meta');
+		} else if (is.linux) {
+			hasZoomModifier = input.modifiers.includes('alt');
+		}
+
+		if (!hasZoomModifier) {
+			return;
+		}
+
+		const actions: Partial<Record<string, string>> = {
+			Numpad0: 'zoom-reset',
+			NumpadAdd: 'zoom-in',
+			NumpadEqual: 'zoom-in',
+			NumpadSubtract: 'zoom-out',
+		};
+		const action = actions[input.code];
+
+		if (action) {
+			event.preventDefault();
+			sendAction(action);
+		}
+	});
+
 	// Start in menu bar mode if enabled, otherwise start normally
 	setUpMenuBarMode(mainWindow);
 
@@ -390,11 +460,11 @@ function createMainWindow(): BrowserWindow {
 		};
 
 		dockMenu = Menu.buildFromTemplate([firstItem]);
-		app.dock.setMenu(dockMenu);
+		app.dock?.setMenu(dockMenu);
 
 		// Dock icon is hidden initially on macOS
 		if (config.get('showDockIcon')) {
-			app.dock.show();
+			app.dock?.show();
 		}
 
 		ipc.once('conversations', () => {
@@ -404,11 +474,14 @@ function createMainWindow(): BrowserWindow {
 		});
 
 		ipc.answerRenderer('conversations', (conversations: Conversation[]) => {
+			conversationListReady = true;
+			openPendingConversation();
+
 			if (conversations.length === 0) {
 				return;
 			}
 
-			const items = conversations.map(({label, icon}, index) => ({
+			const items = conversations.slice(0, 10).map(({label, icon}, index) => ({
 				label: `${label}`,
 				icon: nativeImage.createFromDataURL(icon),
 				click() {
@@ -417,13 +490,46 @@ function createMainWindow(): BrowserWindow {
 				},
 			}));
 
-			app.dock.setMenu(Menu.buildFromTemplate([firstItem, {type: 'separator'}, ...items]));
+			app.dock?.setMenu(Menu.buildFromTemplate([firstItem, {type: 'separator'}, ...items]));
+		});
+	}
+
+	if (is.windows) {
+		ipc.answerRenderer('conversations', (conversations: Conversation[]) => {
+			conversationListReady = true;
+
+			if (conversations.length === 0) {
+				app.setJumpList([]);
+				openPendingConversation();
+				return;
+			}
+
+			const tasks = conversations.slice(0, 10).map(({label}, index) => ({
+				type: 'task' as const,
+				title: label,
+				program: process.execPath,
+				args: `--jump-to-conversation=${index + 1}`,
+				iconPath: caprineIconPath,
+				iconIndex: 0,
+				description: `Open ${label}`,
+			}));
+
+			app.setJumpList([
+				{
+					// Windows can disable custom categories through its privacy settings.
+					// The standard Tasks category remains available in that configuration.
+					type: 'tasks',
+					items: tasks,
+				},
+			]);
+
+			openPendingConversation();
 		});
 	}
 
 	// Update badge on conversations change
 	ipc.answerRenderer('update-tray-icon', async (messageCount: number) => {
-		updateBadge(messageCount);
+		await updateBadge(messageCount);
 	});
 
 	enableHiresResources();
@@ -436,7 +542,7 @@ function createMainWindow(): BrowserWindow {
 
 		await updateAppMenu();
 
-		const files = ['browser.css', 'dark-mode.css', 'vibrancy.css', 'code-blocks.css', 'autoplay.css', 'scrollbar.css'];
+		const files = ['browser.css', 'vibrancy.css', 'code-blocks.css', 'autoplay.css', 'scrollbar.css'];
 
 		const cssPath = path.join(__dirname, '..', 'css');
 
@@ -538,8 +644,14 @@ function createMainWindow(): BrowserWindow {
 		};
 
 		const isTwoFactorAuth = (url: string): boolean => {
-			const twoFactorAuthURL = 'https://www.facebook.com/checkpoint';
-			return url.startsWith(twoFactorAuthURL);
+			const {hostname, pathname} = new URL(url);
+			const isFacebookAuthHost = hostname === 'www.facebook.com' || hostname === 'web.facebook.com';
+
+			return isFacebookAuthHost && [
+				'/checkpoint',
+				'/two_factor',
+				'/two_step_verification',
+			].some(path => pathname.startsWith(path));
 		};
 
 		const isWorkChat = (url: string): boolean => {
@@ -603,6 +715,19 @@ ipc.answerRenderer('titlebar-doubleclick', () => {
 	}
 });
 
+ipc.answerRenderer('open-external', async (url: string) => {
+	try {
+		const externalUrl = stripTrackingFromUrl(url);
+		const {protocol} = new URL(externalUrl);
+
+		if (protocol === 'http:' || protocol === 'https:') {
+			await shell.openExternal(externalUrl);
+		}
+	} catch {
+		// Ignore malformed URLs received from page content.
+	}
+});
+
 app.on('activate', () => {
 	if (mainWindow) {
 		mainWindow.show();
@@ -620,42 +745,81 @@ app.on('before-quit', () => {
 	}
 });
 
-const notifications = new Map();
+const notifications = new Map<number, Notification>();
+type NotificationSource = 'messenger' | 'conversation-list';
+const recentNotifications = new Map<string, {source: NotificationSource; timestamp: number}>();
+const duplicateNotificationWindow = 5000;
 
 ipc.answerRenderer(
 	'notification',
-	({id, title, body, icon, silent}: {id: number; title: string; body: string; icon: string; silent: boolean}) => {
+	({id, href, source, title, body, icon, silent}: {id: number; href?: string; source: NotificationSource; title: string; body: string; icon: string; silent: boolean}) => {
 		// Don't send notifications when the window is focused
-		if (mainWindow.isFocused()) {
+		if (!Notification.isSupported() || mainWindow.isFocused() || config.get('notificationsMuted')) {
 			return;
+		}
+
+		const now = Date.now();
+		const fingerprint = `${title}\n${body}`;
+		const duplicate = recentNotifications.get(fingerprint);
+		if (
+			duplicate
+			&& duplicate.source !== source
+			&& (now - duplicate.timestamp) < duplicateNotificationWindow
+		) {
+			return;
+		}
+
+		recentNotifications.set(fingerprint, {source, timestamp: now});
+		for (const [key, value] of recentNotifications) {
+			if ((now - value.timestamp) >= duplicateNotificationWindow) {
+				recentNotifications.delete(key);
+			}
+		}
+
+		if (notifications.has(id)) {
+			const previousNotification = notifications.get(id)!;
+			notifications.delete(id);
+			previousNotification.close();
 		}
 
 		const notification = new Notification({
 			title,
 			body: config.get('notificationMessagePreview') ? body : 'You have a new message',
-			hasReply: true,
-			icon: nativeImage.createFromDataURL(icon),
+			hasReply: href === undefined,
+			...(icon ? {icon: nativeImage.createFromDataURL(icon)} : {}),
 			silent,
 		});
 
 		notifications.set(id, notification);
 
 		notification.on('click', () => {
-			sendAction('notification-callback', {callbackName: 'onclick', id});
+			showAndFocusWindow(mainWindow);
+			sendAction('notification-callback', {callbackName: 'onclick', id, href});
 
-			notifications.delete(id);
+			if (notifications.get(id) === notification) {
+				notifications.delete(id);
+			}
 		});
 
 		notification.on('reply', (_event, reply: string) => {
 			// We use onclick event used by messenger to go to the right convo
-			sendBackgroundAction('notification-reply-callback', {callbackName: 'onclick', id, reply});
+			sendBackgroundAction('notification-reply-callback', {
+				callbackName: 'onclick',
+				id,
+				reply,
+				href,
+			});
 
-			notifications.delete(id);
+			if (notifications.get(id) === notification) {
+				notifications.delete(id);
+			}
 		});
 
 		notification.on('close', () => {
 			sendBackgroundAction('notification-callback', {callbackName: 'onclose', id});
-			notifications.delete(id);
+			if (notifications.get(id) === notification) {
+				notifications.delete(id);
+			}
 		});
 
 		notification.show();
