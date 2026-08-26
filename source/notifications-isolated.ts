@@ -1,4 +1,7 @@
-((window, notification) => {
+// This function is serialized by `contextBridge.executeInMainWorld`, so it must
+// remain self-contained and must not reference values imported from other modules.
+export function installNotificationProxy(): void {
+	const notification = window.Notification;
 	const notifications = new Map<number, Notification>();
 
 	// Handle events sent from the browser process
@@ -86,4 +89,4 @@
 	Object.setPrototypeOf(augmentedNotification.prototype, notification.prototype);
 
 	Object.assign(window, {Notification: augmentedNotification});
-})(window, Notification);
+}

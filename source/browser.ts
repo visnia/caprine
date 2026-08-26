@@ -1,5 +1,5 @@
 import process from 'node:process';
-import {webFrame} from 'electron';
+import {contextBridge, webFrame} from 'electron';
 import {ipcRenderer as ipc} from 'electron-better-ipc';
 import {is} from 'electron-util';
 import elementReady from 'element-ready';
@@ -7,10 +7,16 @@ import {nativeTheme} from '@electron/remote';
 import selectors from './browser/selectors';
 import {toggleVideoAutoplay} from './autoplay';
 import {sendConversationList} from './browser/conversation-list';
-import {IToggleSounds} from './types';
 import {initializeSettingsPanel} from './settings-panel';
+import {installNotificationProxy} from './notifications-isolated';
+
+// Install this from the preload script, before Messenger's page scripts run.
+// Injecting it at `dom-ready` is too late because Messenger can retain a
+// reference to the original Notification constructor during startup.
+contextBridge.executeInMainWorld({func: installNotificationProxy});
 
 type ThemeSource = typeof nativeTheme.themeSource;
+const notificationIconLoadTimeout = 1000;
 
 async function withMenu(
 	menuButtonElement: HTMLElement,
@@ -233,52 +239,6 @@ ipc.answerMain('archive-conversation', async () => {
 	}
 });
 
-async function openHiddenPreferences(): Promise<boolean> {
-	if (!isPreferencesOpen()) {
-		document.documentElement.classList.add('hide-preferences-window');
-
-		await openPreferences();
-
-		return true;
-	}
-
-	return false;
-}
-
-async function toggleSounds({checked}: IToggleSounds): Promise<void> {
-	const shouldClosePreferences = await openHiddenPreferences();
-
-	const soundsCheckbox = document.querySelector<HTMLInputElement>(`${selectors.preferencesSelector} ${selectors.messengerSoundsSelector}`)!;
-	if (checked === undefined || checked !== soundsCheckbox.checked) {
-		soundsCheckbox.click();
-	}
-
-	if (shouldClosePreferences) {
-		await closePreferences();
-	}
-}
-
-ipc.answerMain('toggle-sounds', toggleSounds);
-
-ipc.answerMain('toggle-mute-notifications', async () => {
-	const shouldClosePreferences = await openHiddenPreferences();
-
-	const notificationCheckbox = document.querySelector<HTMLInputElement>(
-		selectors.notificationCheckbox,
-	)!;
-
-	if (shouldClosePreferences) {
-		await closePreferences();
-	}
-
-	// TODO: Fix notifications
-	if (notificationCheckbox === null) {
-		return false;
-	}
-
-	return !notificationCheckbox.checked;
-});
-
 ipc.answerMain('toggle-message-buttons', async () => {
 	const showMessageButtons = await ipc.callMain<undefined, boolean>('get-config-showMessageButtons');
 	document.body.classList.toggle('show-message-buttons', !showMessageButtons);
@@ -384,31 +344,21 @@ async function updateSidebar(): Promise<void> {
 	}
 }
 
-async function updateDoNotDisturb(): Promise<void> {
-	/* TODO: Implement this function
-	const shouldClosePreferences = await openHiddenPreferences();
-
-	if (shouldClosePreferences) {
-		await closePreferences();
-	}
-	*/
-}
-
-function renderOverlayIcon(messageCount: number): HTMLCanvasElement {
+function renderOverlayIcon(messageCount: number, size: number): HTMLCanvasElement {
 	const canvas = document.createElement('canvas');
-	canvas.height = 128;
-	canvas.width = 128;
-	canvas.style.letterSpacing = '-5px';
+	canvas.height = size;
+	canvas.width = size;
 
 	const context = canvas.getContext('2d')!;
 	context.fillStyle = '#f42020';
 	context.beginPath();
-	context.ellipse(64, 64, 64, 64, 0, 0, 2 * Math.PI);
+	context.ellipse(size / 2, size / 2, size / 2, size / 2, 0, 0, 2 * Math.PI);
 	context.fill();
 	context.textAlign = 'center';
+	context.textBaseline = 'middle';
 	context.fillStyle = 'white';
-	context.font = '90px sans-serif';
-	context.fillText(String(Math.min(99, messageCount)), 64, 96);
+	context.font = `bold ${Math.round(size * 0.64)}px system-ui`;
+	context.fillText(String(Math.min(99, messageCount)), size / 2, size * 0.54);
 
 	return canvas;
 }
@@ -425,8 +375,9 @@ ipc.answerMain('update-vibrancy', () => {
 	updateVibrancy();
 });
 
-ipc.answerMain('render-overlay-icon', (messageCount: number): {data: string; text: string} => ({
-	data: renderOverlayIcon(messageCount).toDataURL(),
+ipc.answerMain('render-overlay-icon', (messageCount: number): {data: string; data2x: string; text: string} => ({
+	data: renderOverlayIcon(messageCount, 16).toDataURL(),
+	data2x: renderOverlayIcon(messageCount, 32).toDataURL(),
 	text: String(messageCount),
 }));
 
@@ -597,29 +548,6 @@ function isPreferencesOpen(): boolean {
 	return Boolean(document.querySelector<HTMLElement>(selectors.preferencesSelector));
 }
 
-async function closePreferences(): Promise<void> {
-	// Wait for the preferences window to be closed, then remove the class from the document
-	const preferencesOverlayObserver = new MutationObserver(records => {
-		const removedRecords = records.filter(({removedNodes}) => removedNodes.length > 0 && (removedNodes[0] as HTMLElement).tagName === 'DIV');
-
-		// In case there is a div removed, hide utility class and stop observing
-		if (removedRecords.length > 0) {
-			document.documentElement.classList.remove('hide-preferences-window');
-			preferencesOverlayObserver.disconnect();
-		}
-	});
-
-	const preferencesOverlay = document.querySelector(selectors.preferencesSelector)!;
-
-	// Get the parent of preferences, that's not getting deleted
-	const preferencesParent = preferencesOverlay.closest('div:not([class])')!;
-
-	preferencesOverlayObserver.observe(preferencesParent, {childList: true});
-
-	const closeButton = preferencesOverlay.querySelector(selectors.closePreferencesButton)!;
-	(closeButton as HTMLElement)?.click();
-}
-
 function insertionListener(event: AnimationEvent): void {
 	if (event.animationName === 'nodeInserted' && event.target) {
 		event.target.dispatchEvent(new Event('mouseover', {bubbles: true}));
@@ -753,11 +681,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 	// Activate Private Mode if it was set before quitting
 	setPrivateMode();
 
-	// Configure do not disturb
-	if (is.macos) {
-		await updateDoNotDisturb();
-	}
-
 	// Disable autoplay if set in settings
 	toggleVideoAutoplay();
 
@@ -890,12 +813,17 @@ window.addEventListener('message', async ({data: {type, data}}) => {
 
 function showNotification({id, href, title, body, icon, silent}: NotificationEvent): void {
 	let sent = false;
+	let iconLoadTimer: number | undefined;
 	const sendNotification = (iconData: string): void => {
 		if (sent) {
 			return;
 		}
 
 		sent = true;
+		if (iconLoadTimer !== undefined) {
+			window.clearTimeout(iconLoadTimer);
+		}
+
 		ipc.callMain('notification', {
 			id,
 			href,
@@ -917,9 +845,14 @@ function showNotification({id, href, title, body, icon, silent}: NotificationEve
 		canvas.width = image.width;
 		canvas.height = image.height;
 
-		context.drawImage(image, 0, 0, image.width, image.height);
-
-		sendNotification(canvas.toDataURL());
+		try {
+			context.drawImage(image, 0, 0, image.width, image.height);
+			sendNotification(canvas.toDataURL());
+		} catch {
+			// A cross-origin avatar can load successfully but still taint the
+			// canvas. The notification is more important than its profile image.
+			sendNotification('');
+		}
 	}, {once: true});
 
 	image.addEventListener('error', () => {
@@ -927,6 +860,10 @@ function showNotification({id, href, title, body, icon, silent}: NotificationEve
 	}, {once: true});
 
 	if (icon) {
+		// Do not let an unavailable Messenger CDN image block the toast forever.
+		iconLoadTimer = window.setTimeout(() => {
+			sendNotification('');
+		}, notificationIconLoadTimeout);
 		image.src = icon;
 	} else {
 		sendNotification('');

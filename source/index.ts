@@ -10,7 +10,6 @@ import {
 	BrowserWindow,
 	Menu,
 	Notification,
-	MenuItemConstructorOptions,
 	systemPreferences,
 	nativeTheme,
 } from 'electron';
@@ -27,7 +26,6 @@ import {
 	openNewGitHubIssue,
 } from 'electron-util';
 import {bestFacebookLocaleFor} from 'facebook-locales';
-import doNotDisturb from '@sindresorhus/do-not-disturb';
 import updateAppMenu from './menu';
 import config, {StoreType} from './config';
 import tray from './tray';
@@ -94,8 +92,6 @@ let isQuitting = false;
 let previousMessageCount = 0;
 let hasInitializedMessageCount = false;
 let badgeUpdateSequence = 0;
-let dockMenu: Menu;
-let isDNDEnabled = false;
 let conversationListReady = false;
 
 function getJumpListConversationIndex(commandLine: readonly string[]): number | undefined {
@@ -151,11 +147,10 @@ async function updateBadge(messageCount: number): Promise<void> {
 	hasInitializedMessageCount = true;
 
 	if (!is.windows) {
-		app.badgeCount = (config.get('showUnreadBadge') && !isDNDEnabled) ? messageCount : 0;
+		app.badgeCount = config.get('showUnreadBadge') ? messageCount : 0;
 
 		if (
 			is.macos
-			&& !isDNDEnabled
 			&& config.get('bounceDockOnMessage')
 			&& hasNewMessages
 		) {
@@ -182,7 +177,7 @@ async function updateBadge(messageCount: number): Promise<void> {
 			mainWindow.setOverlayIcon(null, '');
 		} else {
 			// Delegate drawing of overlay icon to renderer process
-			const overlayIcon = await ipc.callRenderer<number, {data: string; text: string}>(
+			const overlayIcon = await ipc.callRenderer<number, {data: string; data2x: string; text: string}>(
 				mainWindow,
 				'render-overlay-icon',
 				messageCount,
@@ -194,8 +189,10 @@ async function updateBadge(messageCount: number): Promise<void> {
 	}
 }
 
-function updateOverlayIcon({data, text}: {data: string; text: string}): void {
-	const img = nativeImage.createFromDataURL(data);
+function updateOverlayIcon({data, data2x, text}: {data: string; data2x: string; text: string}): void {
+	const img = nativeImage.createEmpty();
+	img.addRepresentation({scaleFactor: 1, dataURL: data});
+	img.addRepresentation({scaleFactor: 2, dataURL: data2x});
 	mainWindow.setOverlayIcon(img, text);
 }
 
@@ -296,19 +293,16 @@ function setUserLocale(): void {
 	session.defaultSession.cookies.set(cookie);
 }
 
-function setNotificationsMute(status: boolean): void {
-	const label = 'Mute Notifications';
-	const muteMenuItem = Menu.getApplicationMenu()?.getMenuItemById('mute-notifications');
-
-	config.set('notificationsMuted', status);
-	if (muteMenuItem) {
-		muteMenuItem.checked = status;
+function getWindowIconPath(): string | undefined {
+	if (is.linux) {
+		return caprineIconPath;
 	}
 
-	if (is.macos) {
-		const item = dockMenu.items.find(x => x.label === label);
-		item!.checked = status;
+	if (is.windows && is.development) {
+		return path.join(__dirname, '..', 'build', 'icon.ico');
 	}
+
+	return undefined;
 }
 
 function createMainWindow(): BrowserWindow {
@@ -326,7 +320,9 @@ function createMainWindow(): BrowserWindow {
 		y: lastWindowState.y,
 		width: lastWindowState.width,
 		height: lastWindowState.height,
-		icon: is.macos ? undefined : caprineIconPath,
+		// Packaged Windows builds use the multi-resolution icon embedded in the EXE.
+		// Supplying the large PNG here makes Windows downscale it for the taskbar.
+		icon: getWindowIconPath(),
 		minWidth: 400,
 		minHeight: 200,
 		alwaysOnTop: config.get('alwaysOnTop'),
@@ -462,19 +458,6 @@ function createMainWindow(): BrowserWindow {
 	setUpMenuBarMode(mainWindow);
 
 	if (is.macos) {
-		const firstItem: MenuItemConstructorOptions = {
-			label: 'Mute Notifications',
-			type: 'checkbox',
-			visible: is.development,
-			checked: config.get('notificationsMuted'),
-			async click() {
-				setNotificationsMute(await ipc.callRenderer(mainWindow, 'toggle-mute-notifications'));
-			},
-		};
-
-		dockMenu = Menu.buildFromTemplate([firstItem]);
-		app.dock?.setMenu(dockMenu);
-
 		// Dock icon is hidden initially on macOS
 		if (config.get('showDockIcon')) {
 			app.dock?.show();
@@ -503,7 +486,7 @@ function createMainWindow(): BrowserWindow {
 				},
 			}));
 
-			app.dock?.setMenu(Menu.buildFromTemplate([firstItem, {type: 'separator'}, ...items]));
+			app.dock?.setMenu(Menu.buildFromTemplate(items));
 		});
 	}
 
@@ -522,7 +505,7 @@ function createMainWindow(): BrowserWindow {
 				title: label,
 				program: process.execPath,
 				args: `--jump-to-conversation=${index + 1}`,
-				iconPath: caprineIconPath,
+				iconPath: getWindowIconPath() ?? process.execPath,
 				iconIndex: 0,
 				description: `Open ${label}`,
 			}));
@@ -586,33 +569,10 @@ function createMainWindow(): BrowserWindow {
 			mainWindow.show();
 		}
 
-		if (is.macos) {
-			// TODO: 'update-dnd-mode' is not called
-			ipc.answerRenderer('update-dnd-mode', async (initialSoundsValue: boolean) => {
-				doNotDisturb.on('change', (doNotDisturb: boolean) => {
-					isDNDEnabled = doNotDisturb;
-					ipc.callRenderer(mainWindow, 'toggle-sounds', {checked: isDNDEnabled ? false : initialSoundsValue});
-				});
-
-				isDNDEnabled = await doNotDisturb.isEnabled();
-
-				return isDNDEnabled ? false : initialSoundsValue;
-			});
-		}
-
-		// TODO: Re-enable this when muting notifications is fixed
-		// setNotificationsMute(await ipc.callRenderer(mainWindow, 'toggle-mute-notifications', {
-		// 	defaultStatus: config.get('notificationsMuted'),
-		// }));
-
 		ipc.callRenderer(mainWindow, 'toggle-message-buttons', config.get('showMessageButtons'));
 
-		await webContents.executeJavaScript(
-			readFileSync(path.join(__dirname, 'notifications-isolated.js'), 'utf8'),
-		);
-
 		if (is.macos) {
-			await import('./touch-bar');
+			await import('./touch-bar.js');
 		}
 	});
 
@@ -651,6 +611,22 @@ function createMainWindow(): BrowserWindow {
 	});
 
 	webContents.on('will-navigate', async (event, url) => {
+		const destinationUrl = new URL(url);
+		const currentUrl = new URL(webContents.getURL());
+		const isConversationPath = (pathname: string): boolean => /(?:^|\/)t\/[^/]+/.test(pathname);
+		const isConversationSwitchNavigation = destinationUrl.origin === currentUrl.origin
+			&& isConversationPath(currentUrl.pathname)
+			&& isConversationPath(destinationUrl.pathname);
+
+		// Once Messenger is displaying a conversation, switching conversations is
+		// handled by its SPA router. Cancel the anchor's native navigation so an
+		// ordering race between the router and Electron cannot reload the document.
+		// The initial /t/ route, login and cross-origin redirects remain untouched.
+		if (isConversationSwitchNavigation) {
+			event.preventDefault();
+			return;
+		}
+
 		const isMessengerDotCom = (url: string): boolean => {
 			const {hostname} = new URL(url);
 			return hostname.endsWith('.messenger.com');
@@ -887,9 +863,7 @@ ipc.answerRenderer<SettingsPanelUpdate, void>('update-settings-panel-setting', a
 
 ipc.answerRenderer<SettingsPanelAction, void>('settings-panel-action', async action => {
 	const urls: Partial<Record<SettingsPanelAction, string>> = {
-		website: 'https://github.com/visnia/caprine',
 		'source-code': 'https://github.com/visnia/caprine',
-		donate: 'https://github.com/visnia/caprine?sponsor=1',
 	};
 	const url = urls[action];
 	if (url) {
@@ -1040,6 +1014,13 @@ ipc.answerRenderer(
 
 		notification.on('close', () => {
 			sendBackgroundAction('notification-callback', {callbackName: 'onclose', id});
+			if (notifications.get(id) === notification) {
+				notifications.delete(id);
+			}
+		});
+
+		notification.on('failed', (_event, error) => {
+			console.error('Could not show desktop notification:', error);
 			if (notifications.get(id) === notification) {
 				notifications.delete(id);
 			}

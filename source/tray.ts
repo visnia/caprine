@@ -163,6 +163,10 @@ function getIconPath(hasUnreadMessages: boolean): string {
 }
 
 function getNonMacOSIconName(hasUnreadMessages: boolean): string {
+	if (is.windows) {
+		return hasUnreadMessages ? 'IconTrayUnread.ico' : 'IconTray.ico';
+	}
+
 	return hasUnreadMessages ? 'IconTrayUnread.png' : 'IconTray.png';
 }
 
