@@ -22,7 +22,6 @@
 		"test:tsc": "npm run build",
 		"test": "npm run test:tsc && npm run lint",
 		"start": "tsc && electron .",
-		"icons:windows": "node scripts/generate-windows-icons.cjs",
 		"build": "tsc",
 		"dist:linux": "electron-builder --linux",
 		"dist:mac": "electron-builder --mac",
