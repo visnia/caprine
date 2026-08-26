@@ -1,11 +1,3 @@
-export type IToggleSounds = {
-	checked: boolean;
-};
-
-export type IToggleMuteNotifications = {
-	defaultStatus: boolean;
-};
-
 export type SpellCheckerLanguageOption = {
 	code: string;
 	label: string;
@@ -63,9 +55,7 @@ export type SettingsPanelUpdate = {
 
 export type SettingsPanelAction =
 	| 'custom-styles'
-	| 'website'
 	| 'source-code'
-	| 'donate'
 	| 'report-issue'
 	| 'switch-to-messenger'
 	| 'relaunch'

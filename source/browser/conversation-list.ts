@@ -17,6 +17,9 @@ const padding = {
 const lastNotifiedMessage = new Map<string, {content: string; timestamp: number}>();
 const conversationPreviews = new Map<string, string>();
 const duplicateNotificationWindow = 30_000;
+const notificationSettleDelay = 300;
+const pendingNotificationRows = new Set<HTMLElement>();
+let pendingNotificationTimer: number | undefined;
 
 function drawIcon(size: number, img?: HTMLImageElement): HTMLCanvasElement {
 	const canvas = document.createElement('canvas');
@@ -266,7 +269,7 @@ function getConversationRows(mutationsList: MutationRecord[]): HTMLElement[] {
 	return [...rows];
 }
 
-function rememberConversationPreview(element: Element): {
+function getConversationPreview(element: Element): {
 	href: string;
 	titleText: string;
 	bodyText: string;
@@ -279,7 +282,6 @@ function rememberConversationPreview(element: Element): {
 
 	const [titleText = '', bodyText = ''] = getConversationText(element);
 	const previousBodyText = conversationPreviews.get(href);
-	conversationPreviews.set(href, bodyText);
 
 	return {
 		href,
@@ -292,15 +294,22 @@ function rememberConversationPreview(element: Element): {
 function snapshotConversationPreviews(sidebar: Element): void {
 	for (const row of sidebar.querySelectorAll('[role=row]')) {
 		if (isConversationRow(row)) {
-			rememberConversationPreview(row);
+			const preview = getConversationPreview(row);
+			if (preview) {
+				conversationPreviews.set(preview.href, preview.bodyText);
+			}
 		}
 	}
 }
 
-function notifyUnreadConversations(mutationsList: MutationRecord[]): void {
-	for (const current of getConversationRows(mutationsList)) {
-		const preview = rememberConversationPreview(current);
-		if (!preview?.changed || !preview.bodyText || !preview.titleText) {
+function notifyUnreadConversations(rows: Iterable<HTMLElement>): void {
+	for (const current of rows) {
+		if (!current.isConnected) {
+			continue;
+		}
+
+		const preview = getConversationPreview(current);
+		if (!preview?.bodyText || !preview.titleText) {
 			continue;
 		}
 
@@ -309,7 +318,14 @@ function notifyUnreadConversations(mutationsList: MutationRecord[]): void {
 		// The preview must both change and be unread. Messenger's own Notification
 		// event remains the primary signal; this observer is only a conservative fallback.
 		if (!isUnreadConversation(current)) {
+			// Do not commit the new preview yet. Messenger can apply the unread
+			// marker in a later render pass, which must still see this text change.
 			lastNotifiedMessage.delete(href);
+			continue;
+		}
+
+		conversationPreviews.set(href, bodyText);
+		if (!preview.changed) {
 			continue;
 		}
 
@@ -339,6 +355,25 @@ function notifyUnreadConversations(mutationsList: MutationRecord[]): void {
 			silent: false,
 		});
 	}
+}
+
+function scheduleUnreadNotifications(mutationsList: MutationRecord[]): void {
+	for (const row of getConversationRows(mutationsList)) {
+		pendingNotificationRows.add(row);
+	}
+
+	if (pendingNotificationTimer !== undefined || pendingNotificationRows.size === 0) {
+		return;
+	}
+
+	// Messenger updates the preview text and unread marker in separate render
+	// passes. Inspect the final row state after both changes have had time to land.
+	pendingNotificationTimer = window.setTimeout(() => {
+		pendingNotificationTimer = undefined;
+		const rows = [...pendingNotificationRows];
+		pendingNotificationRows.clear();
+		notifyUnreadConversations(rows);
+	}, notificationSettleDelay);
 }
 
 function parseUnreadCount(value: string | undefined): number | undefined {
@@ -383,7 +418,7 @@ window.addEventListener('load', async () => {
 
 		const conversationListObserver = new MutationObserver(async () => sendConversationList());
 		const conversationCountObserver = new MutationObserver(async mutationsList => {
-			notifyUnreadConversations(mutationsList);
+			scheduleUnreadNotifications(mutationsList);
 			await updateTrayIcon();
 		});
 
