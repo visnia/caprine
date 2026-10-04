@@ -2,9 +2,11 @@
 
 Phase 1, 2026-10-04. Baseline: `0826641` on `main`; working branch: `tauri`.
 
-**Implementation is stopped before phase 2.** Tauri 2.12.1 does not emit tray click events on Linux. Its standard tray implementation therefore cannot meet the requested left-click window toggle on Linux. The right-click Show / Quit menu is supported. Accepting that Linux behavior or investigating a separate Linux tray backend is a scope decision; neither has been substituted silently.
+**The Linux tray decision is resolved.** Use Tauri's normal menu behavior on Linux (left-click opens Show / Quit), and retain left-click window toggling on Windows. No separate tray backend; `ksni` is a possible later follow-up. Document the platform difference in the rewritten README. Tauri does not expose Linux tray click events to implement a custom toggle.
 
-There is also a notification coverage constraint: a document-start patch of `ServiceWorkerRegistration.prototype.showNotification` intercepts calls in the page's JavaScript context, but does not patch the separate service-worker global context. Native webview notification interception needs investigation before claiming coverage of worker-originated notifications. The page collector alone cannot make that claim.
+**A newly verified Windows notification constraint stops implementation before phase 2 under the original stop-on-blocker instruction.** Microsoft explicitly documents `ICoreWebView2_24::NotificationReceived` for non-persistent notifications only. The requested native hook therefore does not establish persistent/service-worker notification coverage. A document-start patch of `ServiceWorkerRegistration.prototype.showNotification` also cannot patch the worker's separate JavaScript context. No worker coverage or absence of worker notifications may be inferred from an empty native-hook log.
+
+Accepted notification design: native WebView2/WebKitGTK events are the primary source; the page patches supply metadata only and must call the original APIs so native events still occur. The sidebar is the last-resort fallback. Each notification has one owner; metadata correlation by tag/title/time does not become text-only event dedupe. Log source, correlation failures and decisions in debug mode. Persistent notification coverage needs a separately verified path or an explicitly accepted limitation.
 
 ## Repository coverage and current architecture
 
@@ -86,8 +88,8 @@ Grouped rows enumerate the directly used APIs, options and events, including cur
 | `shell.openPath()` | Rust opens only the app-owned `custom.css` path through the opener API. |
 | `dialog.showMessageBoxSync/showMessageBox()` | Remove the offline blocking dialog and obsolete feature prompts. Retry/error/restart messages live in the page panel or dedicated offline state. |
 | `Menu.buildFromTemplate/getApplicationMenu/getMenuItemById`, item `checked/enabled/visible`, menu role/accelerator handling | Drop application-menu code. Use a Rust tray menu containing Show / Quit only; panel controls own settings. |
-| `new Tray`, `setContextMenu/popUpContextMenu`, click/double-click/right-click events | Tauri `TrayIconBuilder`, tray menu and Windows click handler. **Linux click events are unsupported: pending scope decision.** Avoid double-click toggling twice on Windows. |
-| Tray `setImage/setToolTip/destroy` | Tauri tray `set_icon`, tooltip on Windows, owned tray lifetime. Linux tooltip is unsupported; count-in-icon/menu presentation must be explicit if accepted. |
+| `new Tray`, `setContextMenu/popUpContextMenu`, click/double-click/right-click events | Tauri `TrayIconBuilder`, Show / Quit menu and Windows left-click toggle. **Accepted Linux behavior: left-click opens the menu; no custom click handler/backend.** Avoid double-click toggling twice on Windows. |
+| Tray `setImage/setToolTip/destroy` | Tauri tray `set_icon`, tooltip on Windows, owned tray lifetime. Linux tooltip is unsupported; use unread-count icon rendering rather than depending on tooltip support. |
 | `nativeImage.createEmpty/createFromDataURL/createFromPath`, `addRepresentation`, `resize`, `toDataURL` | Tauri `Image`/Rust image decoding for retained app/tray/overlay/notification images. Drop emoji, Dock, Touch Bar and emoji-preview rendering. Bound and validate collector icon data. |
 | `new Notification`, `isSupported/show/close`, events `click/close/failed/reply` | Native Windows toast and Linux D-Bus notification backends with activation callbacks and error handling. `reply` is dropped. Rust applies mute/preview/active-thread rules. |
 | `nativeTheme.themeSource`, `nativeTheme.on('updated')`, `electron-util.darkMode.isEnabled/onChange` | Tauri theme setting/events, web `matchMedia` and retained CSS. Verify the native preference reaches Messenger and the panel; remove vibrancy effects. |
@@ -139,7 +141,20 @@ Checked published crate source rather than assuming behavior from API names. Ver
 
 [Tauri capabilities documentation](https://v2.tauri.app/security/capabilities/) explicitly notes that app commands registered with `invoke_handler` are available by default unless an app command manifest is used to constrain them. A `remote.urls` entry by itself is insufficient evidence that every custom command is restricted. Register command permissions explicitly, use `local: false`, exact `https://www.messenger.com` remote scope and the main webview label, and check the invoking webview/origin in sensitive Rust handlers. Do not grant wildcard core, filesystem, shell, opener, store, updater or window-creation permissions to remote content. Test denial from local pages, other origins, subdomains and call windows.
 
-[MDN's service-worker global documentation](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerGlobalScope) identifies the worker's separate global execution context. [showNotification](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification) is available inside that context too. Patching the page prototype cannot affect it. Investigate the native engines' web-notification callbacks as an additional input to the notification pipeline; do not replace worker scripts or claim page interception covers push handlers.
+[MDN's service-worker global documentation](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerGlobalScope) identifies the worker's separate global execution context. [showNotification](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification) is available inside that context too. Patching the page prototype cannot affect it. Do not replace worker scripts or claim page interception covers push handlers.
+
+### Native notification hook verification after the user's decisions
+
+| Requirement | Verified behavior and implication |
+| --- | --- |
+| Windows native interface | [`ICoreWebView2_24`](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2_24) introduces `add_NotificationReceived`. Stable since SDK **1.0.2739.15**. The current Win32 and .NET documentation both explicitly say **non-persistent notifications**. It is not a persistent/service-worker notification hook. |
+| Runtime minimum | [SDK 1.0.2739.15 release notes](https://learn.microsoft.com/en-us/microsoft-edge/webview2/release-notes/sdk/1-0-2739-15) require **WebView2 Runtime 128.0.2739.15 or later** for full API compatibility. Set at least this installer minimum when implementing the hook and still query/cast the interface at startup. The installed Evergreen runtime directory is **154.0.4258.53**, above that floor. Actual COM interface registration remains untested. |
+| Suppress the WebView2 toast | [`ICoreWebView2NotificationReceivedEventArgs::put_Handled(TRUE)`](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2notificationreceivedeventargs#put_handled) suppresses the default UI. The host must also report shown/clicked/closed through the native notification object; mark handled before calling those methods. Capture the native object and subscription lifetime on the appropriate thread. |
+| Avoid blocking Messenger | Microsoft documents that scripts following `new Notification()` remain blocked until the handler returns, or a deferral completes. Capture/route quickly; do not wait in this handler for frontend metadata, avatar downloads or user interaction. |
+| Linux signal | [`WebKitWebView::show-notification`](https://webkitgtk.org/reference/webkit2gtk/stable/signal.WebView.show-notification.html) has existed since WebKitGTK **2.8**. The default libnotify handler runs after connected handlers. Returning **TRUE** stops subsequent handlers, allowing Caprine to own presentation. These signal docs do not establish persistent/service-worker coverage; that remains a source/runtime verification item. |
+| Metadata and diagnostics | The page constructor patch must record metadata and then call the real constructor; the page `showNotification` patch must record metadata and call the real method. Native events correlate with recent metadata by tag/title/time. A title match alone never deduplicates messages. Native events without metadata are logged as uncorrelated, not assigned to the current conversation. Absence of such events cannot prove no worker notifications occurred. |
+
+The Windows hook is usable for the documented non-persistent path, but **it cannot fulfill the proposed service-worker coverage diagnostic on its own**. A decision is pending on proceeding with phase 2/CI while resolving that gap before phase 4, versus researching the worker path before scaffolding. No workaround has been implemented.
 
 ## Proposed retained architecture
 
@@ -147,7 +162,7 @@ Checked published crate source rather than assuming behavior from API names. Ver
 
 `src/inject/` bundles to one document-start script. It contains the collector, centralized semantic selectors, title/sidebar unread observers, active-thread reporting, retained shortcuts, settings drawer, style injection, link handling and video behavior. The existing panel is adapted, not replaced by a native menu. Its dropped settings and corresponding CSS are deleted.
 
-The collector should forward current native `Notification.permission` through a getter and bind `requestPermission` to the real constructor. Intercept both page APIs before Messenger caches them, preserve expected constructor/event behavior, and log the actual bounded `tag`/`data` shapes when debug logging is enabled. Do not invent a thread ID from the currently open thread when the event does not identify its conversation.
+The collector should forward current native `Notification.permission` through a getter and bind `requestPermission` to the real constructor. Observe both page APIs before Messenger caches them, preserve their native behavior, and log the actual bounded `tag`/`data` shapes when debug logging is enabled. Page patches supply metadata; native engine hooks own primary presentation. Do not invent a thread ID from the currently open thread when the event does not identify its conversation.
 
 Primary events must never be suppressed merely because their body matches earlier text. Cross-source arbitration needs a short thread-based window and tests for primary-first and fallback-first ordering, two real identical messages, several rapid messages in one thread, and overlapping threads. Unknown thread IDs are an explicit diagnostic state, not a text-based dedupe escape hatch. A sidebar that does not expose a stable message identifier cannot perfectly distinguish a repeated identical message from a rerender; primary event coverage remains essential.
 
@@ -171,11 +186,11 @@ Retained config: theme, zoom, window state, always-on-top, launch-at-login, laun
 
 ## Build environment and acceptance status
 
-Node 24.19.0, npm 12.0.2, Git and Python are available. `cargo` and `rustc` are absent from PATH and Cargo was not found in the standard user `.cargo/bin` location. No Visual Studio Installer was found at the checked standard location. WSL reports that the Windows Subsystem for Linux is not installed. This is not a Windows or Linux Tauri build-validation environment yet; prerequisites or CI/another Linux host will be needed.
+Node 24.19.0, npm 12.0.2, Git and Python are available. After the user's installation, rustup reports a default stable `x86_64-pc-windows-msvc` toolchain, with **rustc 1.99.0**. The C++ workload is found by `vswhere` in **Visual Studio 2022 Community**. Cargo/rustc are available under the user's `.cargo/bin`; this existing agent process has not inherited that directory in PATH, so commands must add it per process or use absolute paths. The earlier missing-Windows-toolchain blocker is resolved. Linux runtime testing still needs another host; the user requested Windows/Linux GitHub Actions build jobs on every push to `tauri`, to be added with the scaffold. CI has not yet been configured or run.
 
 No runtime changes have been made, and no Tauri build or Messenger-account test has passed. Source inspection verifies API availability/limitations only. All completion criteria remain open: Windows/Linux build and run, login persistence, matching badges, no duplicate notifications, timely tray/30+ minute idle delivery, correct activation and working calls.
 
-After resolving the scope mismatch, continue with the requested commit sequence:
+After resolving the newly verified notification constraint, continue with the requested commit sequence:
 
 1. This audit commit.
 2. Scaffold and verify Messenger loading, CSS injection and persistent login.
