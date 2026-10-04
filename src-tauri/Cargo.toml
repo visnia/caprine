@@ -1,6 +1,6 @@
 [package]
 name = "caprine"
-version = "3.0.0-alpha.1"
+version = "3.0.0-alpha.2"
 description = "Minimal Messenger wrapper for Windows and Linux"
 edition = "2021"
 rust-version = "1.89"
