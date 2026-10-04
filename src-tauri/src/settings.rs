@@ -29,6 +29,10 @@ pub struct Settings {
     pub mute_notifications: bool,
     pub notification_preview: bool,
     pub flash_taskbar: bool,
+    pub autoplay_videos: bool,
+    pub spell_check: bool,
+    pub hardware_acceleration: bool,
+    pub auto_update: bool,
 }
 
 impl Default for Settings {
@@ -45,6 +49,10 @@ impl Default for Settings {
             mute_notifications: false,
             notification_preview: true,
             flash_taskbar: true,
+            autoplay_videos: true,
+            spell_check: true,
+            hardware_acceleration: true,
+            auto_update: true,
         }
     }
 }
@@ -68,6 +76,11 @@ pub enum Update {
     MuteNotifications(bool),
     NotificationPreview(bool),
     FlashTaskbar(bool),
+    AutoplayVideos(bool),
+    SpellCheck(bool),
+    HardwareAcceleration(bool),
+    #[serde(rename = "autoUpdate")]
+    AutomaticUpdates(bool),
 }
 
 impl Settings {
@@ -98,6 +111,11 @@ impl Settings {
             Update::MuteNotifications(v) => next.mute_notifications = v,
             Update::NotificationPreview(v) => next.notification_preview = v,
             Update::FlashTaskbar(v) => next.flash_taskbar = v,
+            Update::AutoplayVideos(v) => next.autoplay_videos = v,
+            Update::SpellCheck(v) => next.spell_check = v,
+            // Engine process arguments/policies are fixed at startup.
+            Update::HardwareAcceleration(v) => next.hardware_acceleration = v,
+            Update::AutomaticUpdates(v) => next.auto_update = v,
         }
         next.validate()?;
         Ok(next)
@@ -194,6 +212,9 @@ fn apply_native(app: &tauri::AppHandle, old: &Settings, new: &Settings) -> Resul
             app.autolaunch().disable()
         }
         .map_err(|e| e.to_string())?;
+    }
+    if old.spell_check != new.spell_check {
+        crate::engine::set_spell_check(&window, new.spell_check)?;
     }
     Ok(())
 }

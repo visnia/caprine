@@ -1,6 +1,9 @@
 // Adapted from source/settings-panel.ts: retain the in-page drawer and controls.
 import {invoke} from '@tauri-apps/api/core';
+import {listen} from '@tauri-apps/api/event';
 import {zoomUpdate, type Settings, type SettingsClient, type SettingUpdate} from './settings';
+
+type UpdateStatus = {state: 'idle' | 'unsupported' | 'checking' | 'upToDate' | 'available' | 'installing' | 'error'; version: string | null; message: string | null};
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] => {
 	const node = document.createElement(tag);
@@ -113,13 +116,44 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 	toggle(behavior, 'Launch at login', 'Start Caprine when you sign in to your computer.', 'launchAtLogin');
 	toggle(behavior, 'Launch minimized', 'Start in the system tray.', 'launchMinimized');
 	toggle(behavior, 'Quit on window close', 'Exit instead of keeping Caprine in the system tray.', 'quitOnWindowClose');
+	const media = section('Messages & media');
+	toggle(media, 'Autoplay videos', 'Let videos and animated clips start on their own. Calls are not affected.', 'autoplayVideos');
+	toggle(media, 'Spell checking', platform === 'windows'
+		? 'Underline misspellings in the message composer.'
+		: 'Underline misspellings using the system locale dictionaries.', 'spellCheck');
 	const notifications = section('Notifications');
 	toggle(notifications, 'Mute notifications', 'Suppress message notifications and taskbar flashing.', 'muteNotifications');
 	toggle(notifications, 'Message preview', 'Include message text in desktop notifications.', 'notificationPreview');
 	if (platform === 'windows') toggle(notifications, 'Flash taskbar', 'Flash the taskbar when a message notification arrives.', 'flashTaskbar');
 	const advanced = section('Advanced');
 	toggle(advanced, 'Debug notifications', 'Record notification diagnostics in the app data folder.', 'debugNotifications');
+	toggle(advanced, 'Hardware acceleration', 'Use the GPU for rendering. Takes effect after Relaunch Caprine.', 'hardwareAcceleration');
 	action(advanced, 'Custom styles', 'Edit custom.css, then press Ctrl+R to apply changes.', 'Open CSS', () => invoke('panel_action', {action: 'customStyles'}));
+	const updates = section('Updates');
+	toggle(updates, 'Automatic update checks', 'Check GitHub releases every few hours and notify when an update is ready.', 'autoUpdate');
+	const updateControl = row(updates, 'Signed updates', '');
+	const updateDescription = updateControl.previousElementSibling!.lastElementChild!;
+	const updateButton = button('Check now');
+	updateControl.append(updateButton);
+	let updateState: UpdateStatus = {state: 'idle', version: null, message: null};
+	const showUpdate = (status: UpdateStatus) => {
+		updateState = status;
+		const text: Record<UpdateStatus['state'], string> = {
+			idle: 'Not checked yet.', checking: 'Checking…', upToDate: 'Caprine is up to date.',
+			available: `Version ${status.version} is available.`, installing: `Installing ${status.version}…`,
+			unsupported: status.message ?? 'Updates are unavailable in this build.', error: `Update failed: ${status.message}`,
+		};
+		updateDescription.textContent = text[status.state];
+		updateButton.textContent = status.state === 'available' ? 'Install & restart' : 'Check now';
+		updateButton.disabled = ['unsupported', 'checking', 'installing'].includes(status.state);
+	};
+	updateButton.addEventListener('click', () => {
+		const request = updateState.state === 'available' ? 'install' : 'check';
+		void run(updateButton, async () => showUpdate(await invoke<UpdateStatus>('updater_action', {request})))
+			.then(() => showUpdate(updateState));
+	});
+	void listen<UpdateStatus>('update-status', event => showUpdate(event.payload)).catch(() => {});
+	void invoke<UpdateStatus>('updater_action', {request: 'status'}).then(showUpdate, error => showUpdate({state: 'error', version: null, message: String(error)}));
 	const help = section('Help & about');
 	help.append(element('p', 'caprine-settings-section-description', `Caprine (Visnia) ${version}`));
 	action(help, 'Source code', 'github.com/visnia/caprine', 'Open', () => invoke('open_external', {url: 'https://github.com/visnia/caprine'}));

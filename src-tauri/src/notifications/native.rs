@@ -45,9 +45,36 @@ pub fn activate(app: &tauri::AppHandle, delivery: &Delivery) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         platform::clicked(delivery.id);
-        if let Err(error) = crate::tray::restore(&handle) { super::log(&handle, serde_json::json!({"source":"activation","decision":"error","reason":error})); }
-        if let (Some(window), Some(url)) = (handle.get_webview_window("main"), delivery.thread_url.as_deref().and_then(super::thread_url)) {
-            if let Err(error) = window.navigate(url.1.parse().expect("validated thread URL")) { super::log(&handle, serde_json::json!({"source":"activation","decision":"error","reason":error.to_string()})); }
+        let result = match &delivery.action {
+            super::Action::RevealFile(path) => {
+                use tauri_plugin_opener::OpenerExt;
+                handle
+                    .opener()
+                    .reveal_item_in_dir(path)
+                    .map_err(|e| e.to_string())
+            }
+            super::Action::InstallUpdate => {
+                crate::update::install_in_background(&handle);
+                Ok(())
+            }
+            super::Action::RestoreWindow => crate::tray::restore(&handle),
+            super::Action::Message(thread) => crate::tray::restore(&handle).and_then(|()| {
+                match (
+                    handle.get_webview_window("main"),
+                    thread.as_deref().and_then(super::thread_url),
+                ) {
+                    (Some(window), Some(url)) => window
+                        .navigate(url.1.parse().expect("validated thread URL"))
+                        .map_err(|e| e.to_string()),
+                    _ => Ok(()),
+                }
+            }),
+        };
+        if let Err(error) = result {
+            super::log(
+                &handle,
+                serde_json::json!({"source":"activation","decision":"error","reason":error}),
+            );
         }
         platform::close_on_main(delivery.id);
     });

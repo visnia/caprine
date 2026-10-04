@@ -13,6 +13,10 @@ export type Settings = {
 	muteNotifications: boolean;
 	notificationPreview: boolean;
 	flashTaskbar: boolean;
+	autoplayVideos: boolean;
+	spellCheck: boolean;
+	hardwareAcceleration: boolean;
+	autoUpdate: boolean;
 };
 export type SettingUpdate = {[K in keyof Settings]: {setting: K; value: Settings[K]}}[keyof Settings];
 export type SettingsClient = ReturnType<typeof createSettingsClient>;

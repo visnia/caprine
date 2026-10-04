@@ -20,7 +20,9 @@
 		"tauri": "tauri",
 		"build:app": "tauri build --no-bundle",
 		"dist:win": "tauri build --bundles nsis",
-		"dist:linux": "tauri build --bundles appimage,deb"
+		"dist:linux": "tauri build --bundles appimage,deb",
+		"dist:win:unsigned": "tauri build --bundles nsis --config src-tauri/tauri.unsigned.conf.json",
+		"dist:linux:unsigned": "tauri build --bundles appimage,deb --config src-tauri/tauri.unsigned.conf.json"
 	},
 	"dependencies": {
 		"@tauri-apps/api": "2.12.1"

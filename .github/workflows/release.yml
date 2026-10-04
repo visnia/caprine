@@ -1,0 +1,88 @@
+name: Release
+
+# Push a tag matching tauri.conf.json's version (for example v3.0.0-alpha.2).
+# The result is a draft release: publishing it makes latest.json reachable at
+# releases/latest/download, which is the updater endpoint.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            bundles: nsis
+          # Older glibc baseline for the AppImage and .deb.
+          - os: ubuntu-22.04
+            platform: linux
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require the updater signing key
+        shell: bash
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::Set the TAURI_SIGNING_PRIVATE_KEY (and _PASSWORD) repository secrets."
+            exit 1
+          fi
+      - name: Check tag matches version
+        shell: bash
+        run: node -e "const v=require('./src-tauri/tauri.conf.json').version; if ('v'+v !== process.env.GITHUB_REF_NAME) { console.error('tag', process.env.GITHUB_REF_NAME, 'version', v); process.exit(1) }"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf file
+      - run: npm ci
+      - run: npm test
+      - name: Rust tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Build signed bundles
+        run: npm run tauri -- build --bundles ${{ matrix.bundles }} -- --locked
+      - name: Collect and verify signatures
+        run: node scripts/release-artifacts.mjs collect ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: release/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+      - name: Write updater manifest
+        run: node scripts/release-artifacts.mjs manifest "$GITHUB_REF_NAME"
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --title "Caprine (Visnia) $GITHUB_REF_NAME" \
+            --notes "Windows: NSIS installer. Linux: AppImage and .deb. The in-app updater verifies the minisign signatures in latest.json."

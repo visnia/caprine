@@ -5,6 +5,7 @@ import {createSettingsClient, zoomUpdate, type Settings} from './settings';
 import {initializeSettingsPanel} from './settings-panel';
 import {observeUnread} from './unread';
 import {installCollector} from './collector';
+import {createSpellcheckController, installAutoplayGuard} from './media';
 
 type Bootstrap = {version: string; platform: 'windows' | 'linux'; customCss: string; customCssError: string | null; settings: Settings};
 
@@ -12,6 +13,8 @@ type Bootstrap = {version: string; platform: 'windows' | 'linux'; customCss: str
 // independently enforces IPC; only Messenger's top frame gets our integration.
 if (location.origin === 'https://www.messenger.com' && window === window.top) {
 	const collector = installCollector(event => invoke('collect_notification', {event}));
+	// Patched at document start, before Messenger can cache HTMLMediaElement.play.
+	const autoplay = installAutoplayGuard(window);
 	const ready = document.readyState === 'loading'
 		? new Promise<void>(resolve => document.addEventListener('DOMContentLoaded', () => resolve(), {once: true}))
 		: Promise.resolve();
@@ -32,7 +35,11 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 		.then(async ([, state]) => {
 			installStyles(state.customCss);
 			const settings = createSettingsClient(state.settings);
-			const applySettings = (value: Settings) => { applyTheme(value.theme); applyDiagnostics(value); };
+			const spellcheck = createSpellcheckController(document);
+			const applySettings = (value: Settings) => {
+				applyTheme(value.theme); applyDiagnostics(value);
+				autoplay.set(value.autoplayVideos); spellcheck.set(value.spellCheck);
+			};
 			settings.subscribe(applySettings);
 			applySettings(settings.get());
 			const panel = initializeSettingsPanel(settings, state.version, state.platform);

@@ -77,6 +77,13 @@ pub enum Event {
     Click(u64),
     Close(u64),
     Runtime(serde_json::Value),
+    /// App-owned notices (downloads, updates). They bypass message policy
+    /// and arbitration because no Messenger event owns them.
+    System {
+        title: String,
+        body: String,
+        action: Action,
+    },
 }
 pub struct Broker {
     sender: mpsc::Sender<Event>,
@@ -125,12 +132,20 @@ enum PendingEvent {
     Native(NativeEvent),
     Fallback(Collected),
 }
+#[derive(Clone, Debug, PartialEq)]
+pub enum Action {
+    /// Restore the window and open a validated thread URL when known.
+    Message(Option<String>),
+    RevealFile(std::path::PathBuf),
+    RestoreWindow,
+    InstallUpdate,
+}
 #[derive(Clone)]
 pub struct Delivery {
     pub id: u64,
     pub title: String,
     pub body: String,
-    pub thread_url: Option<String>,
+    pub action: Action,
     pub icon: Option<std::path::PathBuf>,
 }
 
@@ -178,7 +193,7 @@ fn run(app: tauri::AppHandle, receiver: mpsc::Receiver<Event>) {
                 if let Some(delivery) = delivered.remove(&id) {
                     log(
                         &app,
-                        serde_json::json!({"source":"activation","nativeId":id,"decision":"open","threadUrl":delivery.thread_url}),
+                        serde_json::json!({"source":"activation","nativeId":id,"decision":"open","action":format!("{:?}", delivery.action)}),
                     );
                     native::activate(&app, &delivery);
                     if let Some(path) = delivery.icon {
@@ -191,6 +206,21 @@ fn run(app: tauri::AppHandle, receiver: mpsc::Receiver<Event>) {
                 pending.retain(|p| !matches!(&p.item, PendingEvent::Native(n) if n.id == id));
             }
             Ok(Event::Runtime(value)) => log(&app, value),
+            Ok(Event::System {
+                title,
+                body,
+                action,
+            }) => {
+                let delivery = Delivery {
+                    id: app.state::<Broker>().id(),
+                    title,
+                    body,
+                    action,
+                    icon: None,
+                };
+                native::show(&app, delivery.clone());
+                delivered.insert(delivery.id, delivery);
+            }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => (),
         }
@@ -287,7 +317,7 @@ fn run(app: tauri::AppHandle, receiver: mpsc::Receiver<Event>) {
                 } else {
                     "You have a new message".into()
                 },
-                thread_url: thread.map(|v| v.1),
+                action: Action::Message(thread.map(|v| v.1)),
                 icon,
             };
             native::show(&app, delivery.clone());

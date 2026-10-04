@@ -27,6 +27,23 @@ In **Ctrl+,**, enable **Debug notifications**, **Unread badge**, **Message previ
 
 Repeat on a real Linux desktop. Linux left-click opens the Show / Quit tray menu; numeric tray titles depend on the desktop. There is no Windows overlay/flash control. Check popup actions and the desktop's notification history where supported. CI does not exercise a Linux desktop session.
 
+## Phase 5 runtime checks
+
+These are not badge/notification checks, but they use the same debug build and session. None has been run yet.
+
+| Check | Action | Expected |
+| --- | --- | --- |
+| Attachment download | Download a received file and an image from the media viewer. | Saved in Downloads without overwriting; a *Download complete* toast reveals the file. Failure shows *Download failed*. |
+| Call window | Start and receive a video call. | A separate Caprine call window opens and stays connected to the main window; camera/microphone work without a prompt. External links inside it open in the browser. |
+| Device denial | Turn off camera access in Windows privacy settings, then start a call. | Messenger reports the device as unavailable; Caprine does not crash or loop. |
+| Offline startup/recovery | Quit, disconnect the network, start Caprine, reconnect after about 30 s. | *Messenger is unreachable* page with a countdown; Messenger loads automatically after reconnecting, or immediately with **Retry now**. |
+| Autoplay off | Disable **Autoplay videos**, open a chat with videos/animated clips. | Videos stay paused until clicked; clicking plays them; calls are unaffected. |
+| Spell checking off/on | Type a misspelling, toggle **Spell checking**. | Underlines disappear when off and return when on (the engine may only re-check after the next keystroke). |
+| Ringtone | Receive a call. | The ringtone plays: ringtone muting is **not implemented** (see the audit). |
+| Hardware acceleration | Disable it, **Relaunch Caprine**. | Messenger still renders (software rendering may feel slower) and the toggle stays off after relaunch. Re-enable it and relaunch. |
+| Updater (debug build) | Open **Updates** in Ctrl+,. | Shows that updates are available only in installed release builds; **Check now** is disabled. |
+| Updater (installed) | After a published draft release with a newer version, use **Check now**, then **Install & restart**. | Signature verifies, NSIS installs passively and Caprine restarts on the new version; settings/login persist. |
+
 ## Logs
 
 Windows: `%APPDATA%\com.visnia.caprine\notifications.jsonl`. Linux: `$XDG_DATA_HOME/com.visnia.caprine/notifications.jsonl`, defaulting to `~/.local/share`. Rotation keeps one `.jsonl.1` backup at 1 MiB.
@@ -45,4 +62,4 @@ Debug logs may contain conversation titles, IDs and Messenger-provided metadata.
 
 WebView2's hook is non-persistent-only. With no registered workers in the measured session, the worker gap is currently not applicable. No worker blocking or script interception exists. The sidebar cannot reconstruct identical messages from an unchanged preview or unseen virtualized rows; native coverage remains essential.
 
-Click callbacks are retained while Caprine runs. Opening a historical toast's conversation after quitting/restarting the process is not implemented; the running-in-tray Action Center check above is separate. Linux history behavior depends on the notification server. Calls, downloads, offline recovery and signed updates remain later work.
+Click callbacks are retained while Caprine runs. Opening a historical toast's conversation after quitting/restarting the process is not implemented; the running-in-tray Action Center check above is separate. Linux history behavior depends on the notification server. Calls, downloads, offline recovery and updates are implemented in phase 5; see the runtime checks above.

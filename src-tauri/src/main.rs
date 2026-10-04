@@ -3,11 +3,16 @@
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
 compile_error!("Caprine supports Windows and Linux only");
 
+mod calls;
 mod diagnostics;
+mod downloads;
+mod engine;
 mod notifications;
+mod offline;
 mod policy;
 mod settings;
 mod tray;
+mod update;
 
 use std::fs;
 use tauri::{Manager, Webview, WebviewUrl, WebviewWindowBuilder};
@@ -155,7 +160,21 @@ fn open_external(app: tauri::AppHandle, webview: Webview, url: String) -> Result
     open_link(&app, &url)
 }
 
-fn open_link(app: &tauri::AppHandle, url: &str) -> Result<(), String> {
+#[tauri::command]
+async fn updater_action(
+    app: tauri::AppHandle,
+    webview: Webview,
+    request: update::Request,
+) -> Result<update::Status, String> {
+    require_messenger(&webview)?;
+    Ok(match request {
+        update::Request::Status => update::status(&app),
+        update::Request::Check => update::check(&app).await,
+        update::Request::Install => update::install(&app).await,
+    })
+}
+
+pub(crate) fn open_link(app: &tauri::AppHandle, url: &str) -> Result<(), String> {
     app.opener()
         .open_url(policy::external_url(url)?.as_str(), None::<&str>)
         .map_err(|e| e.to_string())
@@ -189,7 +208,8 @@ fn main() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::Builder::new().app_name(autostart_name).args(["--autostart"]).build())
         .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(tray::WINDOW_STATE).with_filter(|label| label == "main").build())
-        .invoke_handler(tauri::generate_handler![bootstrap, open_external, log_service_worker_inventory, get_settings, update_setting, panel_action, report_unread, collect_notification])
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![bootstrap, open_external, log_service_worker_inventory, get_settings, update_setting, panel_action, report_unread, collect_notification, updater_action])
         .setup(|app| {
             let profile = app.path().app_local_data_dir()?.join("webview");
             fs::create_dir_all(&profile)?;
@@ -200,6 +220,8 @@ fn main() {
             app.manage(diagnostics::Diagnostics::new(app.handle(), settings.debug_notifications)?);
             app.manage(tray::TrayState::default());
             app.manage(notifications::Broker::start(app.handle().clone()));
+            app.manage(offline::Offline::default());
+            app.manage(update::UpdateState::default());
             let navigation_app = app.handle().clone();
             let popup_app = app.handle().clone();
             // Install engine hooks before Messenger can construct notifications.
@@ -215,11 +237,9 @@ fn main() {
                 .disable_drag_drop_handler()
                 .zoom_hotkeys_enabled(false)
                 .initialization_script(include_str!("../../dist/inject.js"))
-                .on_permission_request(|webview, kind| {
-                    use tauri::webview::{PermissionKind, PermissionResponse};
-                    if matches!(kind, PermissionKind::Notifications) {
-                        if require_messenger(&webview).is_ok() { PermissionResponse::Allow } else { PermissionResponse::Deny }
-                    } else { PermissionResponse::Default }
+                .on_permission_request(|webview, kind| calls::permission(&webview, kind))
+                .on_page_load(|window, payload| {
+                    if payload.event() == tauri::webview::PageLoadEvent::Finished { offline::page_loaded(&window, payload.url()); }
                 })
                 .on_navigation(move |url| {
                     if url.as_str() == "about:blank" || policy::is_messenger(url) || policy::is_authentication(url) {
@@ -231,22 +251,27 @@ fn main() {
                         false
                     }
                 })
-                .on_new_window(move |url, _| {
-                    // Related call windows are implemented in the calls phase.
-                    if !policy::is_messenger(&url) && url.scheme() != "about" {
-                        if let Err(error) = open_link(&popup_app, url.as_str()) {
-                            eprintln!("Could not open external popup: {error}");
-                        }
-                    }
-                    tauri::webview::NewWindowResponse::Deny
-                });
+                .on_new_window(move |url, features| calls::new_window(&popup_app, url, features));
             #[cfg(target_os = "windows")]
-            let builder = builder.additional_browser_args("--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows");
+            let builder = builder
+                .additional_browser_args(&format!(
+                    "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows{}",
+                    if settings.hardware_acceleration { "" } else { " --disable-gpu" }
+                ))
+                // WebView2 picks a unique name in the default download folder.
+                .on_download(|webview, event| {
+                    if let tauri::webview::DownloadEvent::Finished { path, success, .. } = event {
+                        downloads::finished(webview.app_handle(), path, success);
+                    }
+                    true
+                });
             let window = builder.build()?;
             window.set_zoom(settings.zoom_factor)?;
             tray::install(app.handle())?;
             tray::refresh(app.handle())?;
+            engine::install(&window, &settings)?;
             notifications::install(&window)?;
+            update::start(app.handle());
             let close_app = app.handle().clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {

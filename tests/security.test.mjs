@@ -52,9 +52,19 @@ test('remote capability has only app commands, exact origin, and no local access
 	assert.equal(capability.local, false);
 	assert.deepEqual(capability.remote.urls, ['https://www.messenger.com']);
 	assert.deepEqual(capability.webviews, ['main']);
-	assert.deepEqual(capability.permissions, ['allow-bootstrap', 'allow-open-external', 'allow-log-service-worker-inventory', 'allow-get-settings', 'allow-update-setting', 'allow-panel-action', 'allow-report-unread', 'allow-collect-notification', 'core:event:allow-listen', 'core:event:allow-unlisten']);
+	assert.deepEqual(capability.permissions, ['allow-bootstrap', 'allow-open-external', 'allow-log-service-worker-inventory', 'allow-get-settings', 'allow-update-setting', 'allow-panel-action', 'allow-report-unread', 'allow-collect-notification', 'allow-updater-action', 'core:event:allow-listen', 'core:event:allow-unlisten']);
 	const manifest = await readFile(new URL('../src-tauri/build.rs', import.meta.url), 'utf8');
-	for (const command of ['bootstrap', 'open_external', 'log_service_worker_inventory', 'get_settings', 'update_setting', 'panel_action', 'report_unread', 'collect_notification']) {
+	for (const command of ['bootstrap', 'open_external', 'log_service_worker_inventory', 'get_settings', 'update_setting', 'panel_action', 'report_unread', 'collect_notification', 'updater_action']) {
 		assert.ok(manifest.includes(`"${command}"`), `${command} must be registered in the app ACL`);
 	}
+});
+
+test('updater signing uses a real minisign key and signed-version enforcement', async () => {
+	const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'));
+	const updater = config.plugins.updater;
+	assert.equal(config.bundle.createUpdaterArtifacts, true);
+	assert.equal(updater.requireSignedVersion, true);
+	assert.deepEqual(updater.endpoints, ['https://github.com/visnia/caprine/releases/latest/download/latest.json']);
+	const key = Buffer.from(updater.pubkey, 'base64').toString('utf8');
+	assert.match(key, /^untrusted comment: minisign public key: [0-9A-F]{16}\n[A-Za-z0-9+/=]{56}\n$/);
 });
