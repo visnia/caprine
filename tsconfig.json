@@ -1,16 +1,20 @@
 {
-	"extends": "@sindresorhus/tsconfig",
 	"compilerOptions": {
-		"rootDir": "source",
-		"outDir": "dist-js",
 		"target": "ES2022",
-		"module": "Node16",
-		"moduleResolution": "Node16",
-		"esModuleInterop": true,
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
 		"lib": [
-			"esnext",
-			"dom",
-			"dom.iterable"
-		]
-	}
+			"ES2022",
+			"DOM",
+			"DOM.Iterable"
+		],
+		"strict": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"noUncheckedIndexedAccess": true,
+		"verbatimModuleSyntax": true
+	},
+	"include": [
+		"src/**/*.ts"
+	]
 }

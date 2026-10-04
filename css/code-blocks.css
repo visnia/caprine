@@ -115,12 +115,3 @@ html.dark-mode ._wu0 {
 	--code-block-border: var(--base-ten);
 	color: var(--base);
 }
-
-/* Full-window vibrancy */
-html.full-vibrancy ._wu0 {
-	--code-block-background: #fff;
-	--code-block-border: transparent;
-}
-html.full-vibrancy.dark-mode ._wu0 {
-	--code-block-background: var(--container-color);
-}

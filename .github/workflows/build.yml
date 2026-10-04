@@ -1,48 +1,58 @@
-name: Build and publish
+name: Tauri build
+
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - '*'
+    branches: [tauri]
+  pull_request:
+    branches: [tauri]
+  workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: tauri-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  tests:
-    uses: ./.github/workflows/tests.yml
   build:
-    needs: [tests]
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - macos-latest
-          - ubuntu-latest
-          - windows-latest
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: 'npm'
-      - name: Install dependencies
-        run: npm ci
-      - name: Build Caprine
-        run: npm run build
-      - name: Package Caprine for macOS
-        if: startsWith(matrix.os, 'macos')
-        run: npm run dist:mac -- --publish always
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Package Caprine for Windows
-        if: startsWith(matrix.os, 'windows')
-        run: npm run dist:win -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Package Caprine for Linux
-        if: startsWith(matrix.os, 'ubuntu')
-        run: npm run dist:linux -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - name: Check injected script and IPC configuration
+        run: npm test
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - name: Rust tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Rust lint
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Build native application
+        run: npm run build:app -- -- --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caprine-${{ runner.os }}-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/caprine.exe
+            src-tauri/target/release/caprine
