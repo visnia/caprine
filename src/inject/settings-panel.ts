@@ -178,6 +178,17 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 	};
 	client.subscribe(refresh);
 	refresh(client.get());
+	// Signed in, the launcher sits above Messenger's left rail; the logged-out
+	// page has no rail, so it moves to the corner while a password field shows.
+	let placing = false;
+	const place = () => {
+		placing = false;
+		const login = document.querySelector('input[type="password"]') !== null;
+		if ((launcher.dataset.caprinePage === 'login') !== login) launcher.dataset.caprinePage = login ? 'login' : 'app';
+	};
+	new MutationObserver(() => { if (!placing) { placing = true; queueMicrotask(place); } })
+		.observe(document.body, {subtree: true, childList: true});
+	place();
 	const close = () => {
 		open = false;
 		const target = previousFocus?.isConnected && previousFocus !== document.body ? previousFocus : launcher;

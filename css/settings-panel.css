@@ -69,6 +69,11 @@ html.caprine-settings-open {
 	transition: transform 120ms ease, background 120ms ease, color 120ms ease;
 }
 
+.caprine-settings-launcher[data-caprine-page='login'] {
+	bottom: 16px;
+	left: 16px;
+}
+
 .caprine-settings-launcher:hover {
 	background: var(--caprine-surface);
 	box-shadow: none;
