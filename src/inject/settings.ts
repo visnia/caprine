@@ -2,7 +2,7 @@ import {invoke} from '@tauri-apps/api/core';
 import {listen} from '@tauri-apps/api/event';
 
 export type Settings = {
-	theme: 'system' | 'light' | 'dark';
+	theme: 'system' | 'light' | 'dark' | 'oled';
 	zoomFactor: number;
 	alwaysOnTop: boolean;
 	launchAtLogin: boolean;

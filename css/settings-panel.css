@@ -35,7 +35,9 @@
 }
 
 .caprine-settings-launcher[data-caprine-theme='dark'],
-.caprine-settings-backdrop[data-caprine-theme='dark'] {
+.caprine-settings-backdrop[data-caprine-theme='dark'],
+.caprine-settings-launcher[data-caprine-theme='oled'],
+.caprine-settings-backdrop[data-caprine-theme='oled'] {
 	--caprine-panel: #242526;
 	--caprine-surface: #3a3b3c;
 	--caprine-surface-hover: #4e4f50;
@@ -43,6 +45,14 @@
 	--caprine-text: #e4e6eb;
 	--caprine-secondary-text: #b0b3b8;
 	--caprine-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+}
+
+.caprine-settings-launcher[data-caprine-theme='oled'],
+.caprine-settings-backdrop[data-caprine-theme='oled'] {
+	--caprine-panel: #000;
+	--caprine-surface: #1c1c1d;
+	--caprine-surface-hover: #2a2a2b;
+	--caprine-border: #2a2a2b;
 }
 
 html.caprine-settings-open {

@@ -267,6 +267,7 @@ fn main() {
                 });
             let window = builder.build()?;
             window.set_zoom(settings.zoom_factor)?;
+            settings::apply_title_bar(&window, settings.theme);
             tray::install(app.handle())?;
             tray::refresh(app.handle())?;
             tray::start_blinking(app.handle());
@@ -274,7 +275,16 @@ fn main() {
             notifications::install(&window)?;
             update::start(app.handle());
             let close_app = app.handle().clone();
+            let theme_window = window.clone();
             window.on_window_event(move |event| {
+                if let tauri::WindowEvent::ThemeChanged(_) = event {
+                    // System follows Windows, so its caption must follow too.
+                    // set_theme fires this inside a settings update, which holds
+                    // the lock and applies the caption itself.
+                    if let Some(settings) = close_app.state::<settings::SettingsState>().try_get() {
+                        settings::apply_title_bar(&theme_window, settings.theme);
+                    }
+                }
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                     if close_app.state::<settings::SettingsState>().get().quit_on_window_close {

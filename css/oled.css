@@ -1,0 +1,38 @@
+/* OLED theme: a pure-black frame with near-black panels on top of Messenger's
+own dark mode.
+
+Only Messenger's design tokens are overridden, never its generated class
+names. A token Meta renames simply stops applying and that surface falls back
+to Messenger's dark grey. The signed-in app's <html> has no __fb-dark-mode
+class and gets its dark tokens (e.g. --web-wash: #1A1A1A behind the body) from
+its own rules, so the root is matched through Caprine's signed-in page marker,
+which the login page never gets; !important outranks those rules. Chat themes
+set their own --chat-* tokens and keep them. */
+html.oled-mode[data-caprine-page='app'],
+html.oled-mode.__fb-dark-mode,
+html.oled-mode .__fb-dark-mode {
+	/* The window frame behind the panels is pure black. */
+	--web-wash: #000 !important;
+
+	/* Panels sit a step above it: shadows and hairline rings do not show
+	reliably on black (the conversation panel clips outer rings and its
+	children paint over inset ones), so the tone itself separates them. */
+	--oled-panel: #0f0f0f;
+	--surface-background: var(--oled-panel) !important;
+	--card-background: var(--oled-panel) !important;
+	--messenger-card-background: var(--oled-panel) !important;
+	--messenger-reply-background: var(--oled-panel) !important;
+	--nav-bar-background: var(--oled-panel) !important;
+	--nav-bar-background-gradient: linear-gradient(to top, #0f0f0f, rgb(15 15 15 / 90%), rgb(15 15 15 / 70%), rgb(15 15 15 / 40%), rgb(15 15 15 / 0%)) !important;
+	--nav-bar-background-gradient-wash: linear-gradient(to top, #000, rgb(0 0 0 / 90%), rgb(0 0 0 / 70%), rgb(0 0 0 / 40%), rgb(0 0 0 / 0%)) !important;
+	--input-background: var(--oled-panel) !important;
+	--input-background-disabled: var(--oled-panel) !important;
+
+	/* Search box and composer stay a faint grey so they remain visible. */
+	--comment-background: #1f1f20 !important;
+	--comment-footer-background: #2a2a2b !important;
+
+	/* Floating surfaces keep a lifted grey. */
+	--popover-card-background: #1a1a1b !important;
+	--toast-background: #1a1a1b !important;
+}

@@ -13,6 +13,7 @@ pub enum Theme {
     System,
     Light,
     Dark,
+    Oled,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -88,7 +89,8 @@ impl Settings {
         match self.theme {
             Theme::System => None,
             Theme::Light => Some(tauri::Theme::Light),
-            Theme::Dark => Some(tauri::Theme::Dark),
+            // OLED is Messenger's dark mode with pure-black overrides.
+            Theme::Dark | Theme::Oled => Some(tauri::Theme::Dark),
         }
     }
     fn validate(&self) -> Result<(), String> {
@@ -150,6 +152,11 @@ impl SettingsState {
     pub fn get(&self) -> Settings {
         self.value.lock().expect("settings mutex poisoned").clone()
     }
+    /// For native callbacks that can fire synchronously inside `update` (which
+    /// holds the lock) on the same thread: re-locking there would panic.
+    pub fn try_get(&self) -> Option<Settings> {
+        self.value.try_lock().ok().map(|value| value.clone())
+    }
 
     fn persist(&self, settings: &Settings) -> Result<(), String> {
         let serde_json::Value::Object(values) =
@@ -186,6 +193,35 @@ impl SettingsState {
     }
 }
 
+/// Paints the native caption like Messenger's frame behind the panels
+/// (--web-wash): black for OLED, #1A1A1A for dark, including System while
+/// Windows is dark. Light keeps the system caption, which already matches.
+/// Windows 10 ignores the attribute.
+#[cfg(windows)]
+pub fn apply_title_bar(window: &tauri::WebviewWindow, theme: Theme) {
+    use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_CAPTION_COLOR};
+    // COLORREF is 0x00BBGGRR; 0xFFFFFFFF is DWMWA_COLOR_DEFAULT.
+    let color: u32 = match theme {
+        Theme::Oled => 0x0000_0000,
+        Theme::Dark => 0x001A_1A1A,
+        Theme::System if window.theme().is_ok_and(|t| t == tauri::Theme::Dark) => 0x001A_1A1A,
+        Theme::System | Theme::Light => 0xFFFF_FFFF,
+    };
+    if let Ok(hwnd) = window.hwnd() {
+        unsafe {
+            DwmSetWindowAttribute(
+                hwnd.0 as _,
+                DWMWA_CAPTION_COLOR as _,
+                (&color as *const u32).cast(),
+                size_of::<u32>() as u32,
+            );
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn apply_title_bar(_window: &tauri::WebviewWindow, _theme: Theme) {}
+
 fn apply_native(app: &tauri::AppHandle, old: &Settings, new: &Settings) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
@@ -194,6 +230,7 @@ fn apply_native(app: &tauri::AppHandle, old: &Settings, new: &Settings) -> Resul
         window
             .set_theme(new.native_theme())
             .map_err(|e| e.to_string())?;
+        apply_title_bar(&window, new.theme);
     }
     if old.always_on_top != new.always_on_top {
         window
@@ -249,5 +286,12 @@ mod tests {
         }
         assert!(serde_json::from_str::<Settings>(r#"{"debugNotifications":"true"}"#).is_err());
         assert!(serde_json::from_str::<Settings>(r#"{"privateMode":true}"#).is_err());
+    }
+    #[test]
+    fn oled_theme_parses_and_uses_native_dark() {
+        let update: Update = serde_json::from_str(r#"{"setting":"theme","value":"oled"}"#).unwrap();
+        let settings = Settings::default().updated(update).unwrap();
+        assert_eq!(settings.theme, Theme::Oled);
+        assert_eq!(settings.native_theme(), Some(tauri::Theme::Dark));
     }
 }

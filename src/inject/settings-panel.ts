@@ -94,13 +94,13 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 	const appearance = section('Appearance');
 	const theme = element('select', 'caprine-settings-select');
 	theme.setAttribute('aria-label', 'Theme');
-	for (const [value, text] of [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]) {
+	for (const [value, text] of [['system', 'System'], ['light', 'Light'], ['dark', 'Dark'], ['oled', 'OLED']]) {
 		const option = element('option', '', text);
 		option.value = value!;
 		theme.append(option);
 	}
 	controls.set('theme', theme);
-	row(appearance, 'Theme', 'Follow the system or choose a light or dark theme.').append(theme);
+	row(appearance, 'Theme', 'Follow the system or choose a light, dark or OLED theme.').append(theme);
 	theme.addEventListener('change', () => { void run(theme, () => client.update({setting: 'theme', value: theme.value as Settings['theme']})); });
 	const stepper = element('div', 'caprine-settings-stepper');
 	const decrease = button('−');

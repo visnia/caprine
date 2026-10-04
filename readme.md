@@ -12,7 +12,7 @@ There is no macOS build and no native application menu bar. Settings live in an 
 - **Native notifications** for new messages. Messenger's web app shows none itself, so Caprine detects them from the sidebar's unread marker and preview, plus Messenger's message tone for repeated previews; the engine's notification hook stays in place in case Messenger ever calls it. Notifications are suppressed when **Desktop notifications** is off or Caprine is focused. Clicking one opens its conversation.
 - **Unread badge**: read/unread tray icon, Windows taskbar overlay (up to `99+`) and tray tooltip. While chats are unread and Caprine is not focused, the tray icon blinks between colour and grey and the taskbar badge blinks with it. On Linux, a tray count where the desktop supports tray titles.
 - **Tray and window lifecycle**: close to tray (or quit on close), launch at login, launch minimized, always on top, single instance, and remembered window size/position.
-- **Appearance**: system/light/dark theme, Caprine's code-block and scrollbar styles, your own `custom.css`, and text zoom with **Ctrl+=**, **Ctrl+-** and **Ctrl+0** (persisted).
+- **Appearance**: system/light/dark/OLED theme, Caprine's code-block and scrollbar styles, your own `custom.css`, and text zoom with **Ctrl+=**, **Ctrl+-** and **Ctrl+0** (persisted).
 - **Links** open in your default browser, with Facebook `l.php` tracking redirects removed.
 - **Calls** open in separate windows. Camera, microphone and screen capture are allowed for `https://www.messenger.com` only.
 - **Downloads** go to your Downloads folder without overwriting, and a notification reveals the file.
