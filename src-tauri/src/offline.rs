@@ -53,12 +53,14 @@ pub fn failed(app: &tauri::AppHandle, url: &str, reason: &str) {
         app,
         serde_json::json!({"source":"offline","decision":"retry_scheduled","reason":reason,"attempt":attempt,"delaySeconds":delay(attempt).as_secs()}),
     );
-    if let Some(window) = app.get_webview_window("main") {
-        // Replace the engine error page; the page-load hook renders the notice.
-        let _ = window.navigate("about:blank".parse().expect("about:blank"));
-    }
     let app = app.clone();
+    // Called from an engine navigation callback: navigate from another thread
+    // so the request is queued instead of re-entering the navigation handler.
     std::thread::spawn(move || {
+        if let Some(window) = app.get_webview_window("main") {
+            // Replace the engine error page; the page-load hook renders the notice.
+            let _ = window.navigate("about:blank".parse().expect("about:blank"));
+        }
         std::thread::sleep(delay(attempt));
         let target = {
             let state = app

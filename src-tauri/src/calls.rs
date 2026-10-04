@@ -86,7 +86,9 @@ pub fn new_window(
         if !loaded_messenger.load(Ordering::Relaxed) {
             let app = navigation_app.clone();
             let label = navigation_label.clone();
-            let _ = navigation_app.run_on_main_thread(move || {
+            // Queue the close from another thread; this runs inside the
+            // engine's navigation callback.
+            std::thread::spawn(move || {
                 if let Some(window) = app.get_webview_window(&label) {
                     let _ = window.close();
                 }

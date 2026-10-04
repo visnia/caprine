@@ -15,7 +15,13 @@ pub fn install(window: &tauri::WebviewWindow) -> tauri::Result<()> {
         match platform::install(&app, webview) {
             Ok(()) => {
                 super::send(&app, Event::Runtime(serde_json::json!({"source":"engine","decision":"ready","reason":"native_hook_installed"})));
-                if let Err(error) = ready.navigate(crate::policy::MESSENGER.parse().expect("Messenger URL")) { eprintln!("Could not load Messenger: {error}"); }
+                // Navigating synchronously from this setup-time callback never returns
+                // (the window then stays hidden and the event loop never starts).
+                // From another thread the request is queued to the event loop.
+                let messenger = ready.clone();
+                std::thread::spawn(move || {
+                    if let Err(error) = messenger.navigate(crate::policy::MESSENGER.parse().expect("Messenger URL")) { eprintln!("Could not load Messenger: {error}"); }
+                });
             }
             Err(error) => {
                 eprintln!("Notification engine initialization failed: {error}");
