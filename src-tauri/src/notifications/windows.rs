@@ -225,7 +225,7 @@ fn debug_shortcut(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         std::fs::create_dir_all(&directory)?;
         let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
         link.SetPath(&HSTRING::from(std::env::current_exe()?.as_os_str()))?;
-        link.SetDescription(&HSTRING::from("Caprine (Visnia) development build"))?;
+        link.SetDescription(&HSTRING::from("caprine development build"))?;
         let properties: IPropertyStore = link.cast()?;
         // PKEY_AppUserModel_ID, matching the NSIS SetLnkAppUserModelId macro.
         let key = PROPERTYKEY {
@@ -236,7 +236,7 @@ fn debug_shortcut(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         properties.Commit()?;
         let file: IPersistFile = link.cast()?;
         file.Save(
-            &HSTRING::from(directory.join("Caprine (Visnia) Debug.lnk").as_os_str()),
+            &HSTRING::from(directory.join("caprine Debug.lnk").as_os_str()),
             true,
         )?;
     }

@@ -226,7 +226,7 @@ fn main() {
             let popup_app = app.handle().clone();
             // Install engine hooks before Messenger can construct notifications.
             let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External("about:blank".parse()?))
-                .title("Caprine")
+                .title("caprine")
                 .inner_size(1000.0, 720.0)
                 .min_inner_size(400.0, 300.0)
                 .always_on_top(settings.always_on_top)

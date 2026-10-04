@@ -12,7 +12,7 @@ const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
 const {version} = config;
 const repository = 'visnia/caprine';
 const output = 'release';
-const name = suffix => `Caprine-Visnia_${version}_${suffix}`;
+const name = suffix => `caprine_${version}_${suffix}`;
 // Updater target keys: {os}-{arch}-{bundle} first, then {os}-{arch}.
 const artifacts = {
 	windows: [{directory: 'nsis', extension: '.exe', file: name('x64-setup.exe'), targets: ['windows-x86_64-nsis', 'windows-x86_64']}],

@@ -160,7 +160,7 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 	void listen<UpdateStatus>('update-status', event => showUpdate(event.payload)).catch(() => {});
 	void invoke<UpdateStatus>('updater_action', {request: 'status'}).then(showUpdate, error => showUpdate({state: 'error', version: null, message: String(error)}));
 	const help = section('Help & about');
-	help.append(element('p', 'caprine-settings-section-description', `Caprine (Visnia) ${version}`));
+	help.append(element('p', 'caprine-settings-section-description', `caprine ${version}`));
 	action(help, 'Source code', 'github.com/visnia/caprine', 'Open', () => invoke('open_external', {url: 'https://github.com/visnia/caprine'}));
 	action(help, 'Report an issue', 'Open the issue tracker.', 'Open', () => invoke('open_external', {url: 'https://github.com/visnia/caprine/issues'}));
 	const footer = element('footer', 'caprine-settings-footer');

@@ -27,7 +27,7 @@ pub fn install(window: &tauri::WebviewWindow) -> tauri::Result<()> {
                 eprintln!("Notification engine initialization failed: {error}");
                 super::send(&app, Event::Runtime(serde_json::json!({"source":"engine","decision":"error","reason":error})));
                 // Stop on a missing hook instead of enabling two presentation owners.
-                let message = serde_json::to_string(&format!("Caprine could not initialize notifications: {error}. Update the system webview runtime and restart.")).unwrap();
+                let message = serde_json::to_string(&format!("caprine could not initialize notifications: {error}. Update the system webview runtime and restart.")).unwrap();
                 let _ = ready.eval(format!("document.body.textContent={message}"));
                 let _ = ready.show();
             }

@@ -1,4 +1,4 @@
-# Caprine (Visnia)
+# caprine
 
 A minimal desktop wrapper for **[Messenger](https://www.messenger.com)** on **Windows** and **Linux**, built with Tauri 2. It always loads `https://www.messenger.com`, so it works with Messenger-only accounts. Reliable desktop notifications are the main goal.
 
@@ -46,7 +46,7 @@ Files (`<app data>` is `%APPDATA%\com.visnia.caprine` on Windows, or `$XDG_DATA_
 - **Closing to the tray**: Windows minimizes the window and removes its taskbar entry without hiding or suspending WebView2, and uses `--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows`. Linux hides the window.
 - **Spell checking**: WebView2 has no native spell-check switch, so turning it off sets the HTML `spellcheck` attribute on Messenger's text fields. On Linux, WebKitGTK spell checking uses your locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`) and needs the matching Enchant/Hunspell dictionaries.
 - **Hardware acceleration off**: WebView2 gets `--disable-gpu`; WebKitGTK gets the `NEVER` acceleration policy.
-- **Windows notifications** need the Start Menu shortcut created by the installer (AppUserModelID `com.visnia.caprine`). Debug builds create a separate `Caprine (Visnia) Debug` shortcut.
+- **Windows notifications** need the Start Menu shortcut created by the installer (AppUserModelID `com.visnia.caprine`). Debug builds create a separate `caprine Debug` shortcut.
 
 ## Notification design and known limits
 

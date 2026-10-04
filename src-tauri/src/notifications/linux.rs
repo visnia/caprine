@@ -58,7 +58,7 @@ pub fn show(app: &tauri::AppHandle, delivery: Delivery) {
     tauri::async_runtime::spawn(async move {
         let mut notification = notify_rust::Notification::new();
         notification
-            .appname("Caprine (Visnia)")
+            .appname("caprine")
             .summary(&delivery.title)
             .body(
                 &delivery

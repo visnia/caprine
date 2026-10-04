@@ -84,5 +84,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" release/* \
             --repo "$GITHUB_REPOSITORY" \
             --draft \
-            --title "Caprine (Visnia) $GITHUB_REF_NAME" \
+            --title "caprine $GITHUB_REF_NAME" \
             --notes "Windows: NSIS installer. Linux: AppImage. The in-app updater verifies the minisign signatures in latest.json."

@@ -60,12 +60,12 @@ pub fn new_window(
         &label,
         WebviewUrl::External("about:blank".parse().expect("about:blank")),
     )
-    .title("Caprine call")
+    .title("caprine call")
     .inner_size(960.0, 720.0)
     .window_features(features)
     .on_document_title_changed(|window, title| {
         let _ = window.set_title(if title.trim().is_empty() {
-            "Caprine call"
+            "caprine call"
         } else {
             &title
         });

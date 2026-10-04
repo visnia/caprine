@@ -4,7 +4,7 @@ Windows phase-3 sign-in persistence, settings/theme/zoom, Ctrl+0, close-to-tray,
 
 ## Setup
 
-Quit any running Tauri Caprine using its tray menu, then open the latest `src-tauri/target/debug/caprine.exe`. Debug startup creates `Visnia/Caprine (Visnia) Debug.lnk` in the current user's Start Menu with AUMID `com.visnia.caprine`. Release installation creates its own required shortcut with that AUMID. Electron Caprine keeps its separate identity.
+Quit any running Tauri Caprine using its tray menu, then open the latest `src-tauri/target/debug/caprine.exe`. Debug startup creates `Visnia/caprine Debug.lnk` in the current user's Start Menu with AUMID `com.visnia.caprine`. Release installation creates its own required shortcut with that AUMID. Electron Caprine keeps its separate identity.
 
 In **Ctrl+,**, enable **Debug notifications**, **Desktop notifications**, **Unread badge**, **Message preview** and **Flash taskbar**; disable **Quit on window close**. Enable Messenger's desktop notifications if its UI offers that option. Keep OS notifications enabled and Do Not Disturb off for timing tests. Quit Electron Caprine and other Messenger apps/tabs that can produce competing desktop toasts. Use two conversations, A and B, with another account/person sending incoming messages. Record send time, toast time, unread count and click destination.
 

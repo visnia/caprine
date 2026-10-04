@@ -55,7 +55,7 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&show, &quit])?;
     let builder = TrayIconBuilder::with_id("main-tray")
         .icon(tray_icon(false)?)
-        .tooltip("Caprine (Visnia)")
+        .tooltip("caprine")
         .menu(&menu)
         .on_menu_event(|app, event| {
             let result = match event.id.as_ref() {
@@ -179,9 +179,9 @@ pub fn refresh(app: &tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         tray.set_tooltip(Some(if count == 0 {
-            "Caprine (Visnia) — no unread chats".into()
+            "caprine — no unread chats".into()
         } else {
-            format!("Caprine (Visnia) — {count} unread chats")
+            format!("caprine — {count} unread chats")
         }))
         .map_err(|e| e.to_string())?;
         if let Some(window) = app.get_webview_window("main") {

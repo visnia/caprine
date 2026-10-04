@@ -57,7 +57,7 @@ pub fn support(bundle: Option<BundleType>) -> Result<&'static str, &'static str>
     match bundle {
         Some(BundleType::Nsis) => Ok("nsis"),
         Some(BundleType::AppImage) => Ok("appimage"),
-        Some(_) => Err("This package format is not published for Caprine (Visnia)."),
+        Some(_) => Err("This package format is not published for caprine."),
         None => Err("Updates are available only in installed release builds (NSIS or AppImage)."),
     }
 }
@@ -225,8 +225,8 @@ pub fn start(app: &tauri::AppHandle) {
                         notifications::send(
                             &app,
                             Event::System {
-                                title: format!("Caprine {version} is available"),
-                                body: "Click to install the update and restart Caprine.".into(),
+                                title: format!("caprine {version} is available"),
+                                body: "Click to install the update and restart caprine.".into(),
                                 action: Action::InstallUpdate,
                             },
                         );
