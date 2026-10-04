@@ -6,6 +6,7 @@ import {initializeSettingsPanel} from './settings-panel';
 import {observeUnread} from './unread';
 import {installCollector} from './collector';
 import {createSpellcheckController, installAutoplayGuard} from './media';
+import {observePageKind} from './page';
 
 type Bootstrap = {version: string; platform: 'windows' | 'linux'; customCss: string; customCssError: string | null; settings: Settings};
 
@@ -18,7 +19,7 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 	const ready = document.readyState === 'loading'
 		? new Promise<void>(resolve => document.addEventListener('DOMContentLoaded', () => resolve(), {once: true}))
 		: Promise.resolve();
-	const styled = ready.then(() => installStyles(''));
+	const styled = ready.then(() => { installStyles(''); observePageKind(document); });
 	const bootstrap = invoke<Bootstrap>('bootstrap');
 	let debugEnabled = false;
 	let stopDiagnostics: (() => void) | undefined;

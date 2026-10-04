@@ -69,7 +69,7 @@ html.caprine-settings-open {
 	transition: transform 120ms ease, background 120ms ease, color 120ms ease;
 }
 
-.caprine-settings-launcher[data-caprine-page='login'] {
+html[data-caprine-page='login'] .caprine-settings-launcher {
 	bottom: 16px;
 	left: 16px;
 }
