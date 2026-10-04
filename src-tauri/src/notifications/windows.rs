@@ -148,6 +148,9 @@ pub fn show(app: &tauri::AppHandle, delivery: Delivery) {
                 if reason != Some(tauri_winrt_notification::ToastDismissalReason::TimedOut) { broker::send(&close_app, Event::Close(id)); }
                 Ok(())
             });
+        // Messenger already plays its own tone for every message; a toast sound
+        // on top would double it. App notices (downloads, updates) have no tone.
+        if matches!(delivery.action, broker::Action::Message(_)) { toast = toast.sound(None); }
         if let Some(icon) = &delivery.icon { toast = toast.icon(icon, tauri_winrt_notification::IconCrop::Circular, ""); }
         match toast.show_with_handle() {
             Ok(toast) => {
