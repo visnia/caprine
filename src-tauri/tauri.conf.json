@@ -1,7 +1,7 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
 	"productName": "Caprine (Visnia)",
-	"version": "3.0.0-alpha.3",
+	"version": "3.0.1",
 	"identifier": "com.visnia.caprine",
 	"build": {
 		"beforeDevCommand": "npm run build",
