@@ -25,6 +25,7 @@ pub struct Settings {
     pub launch_at_login: bool,
     pub launch_minimized: bool,
     pub quit_on_window_close: bool,
+    pub show_tray_icon: bool,
     pub show_unread_badge: bool,
     pub debug_notifications: bool,
     pub mute_notifications: bool,
@@ -45,6 +46,7 @@ impl Default for Settings {
             launch_at_login: false,
             launch_minimized: false,
             quit_on_window_close: false,
+            show_tray_icon: true,
             show_unread_badge: true,
             debug_notifications: false,
             mute_notifications: false,
@@ -72,6 +74,7 @@ pub enum Update {
     LaunchAtLogin(bool),
     LaunchMinimized(bool),
     QuitOnWindowClose(bool),
+    ShowTrayIcon(bool),
     ShowUnreadBadge(bool),
     DebugNotifications(bool),
     MuteNotifications(bool),
@@ -97,6 +100,9 @@ impl Settings {
         if !self.zoom_factor.is_finite() || !(0.5..=2.0).contains(&self.zoom_factor) {
             return Err("Zoom must be between 50% and 200%".into());
         }
+        if !self.show_tray_icon && !self.quit_on_window_close {
+            return Err("Turn on Quit on window close before hiding the tray icon".into());
+        }
         Ok(())
     }
     fn updated(&self, update: Update) -> Result<Self, String> {
@@ -107,7 +113,13 @@ impl Settings {
             Update::AlwaysOnTop(v) => next.always_on_top = v,
             Update::LaunchAtLogin(v) => next.launch_at_login = v,
             Update::LaunchMinimized(v) => next.launch_minimized = v,
-            Update::QuitOnWindowClose(v) => next.quit_on_window_close = v,
+            // Keeping Caprine running after close needs the tray to bring it
+            // back, so the tray can only be hidden while closing quits.
+            Update::QuitOnWindowClose(v) => {
+                next.quit_on_window_close = v;
+                next.show_tray_icon |= !v;
+            }
+            Update::ShowTrayIcon(v) => next.show_tray_icon = v,
             Update::ShowUnreadBadge(v) => next.show_unread_badge = v,
             Update::DebugNotifications(v) => next.debug_notifications = v,
             Update::MuteNotifications(v) => next.mute_notifications = v,
@@ -138,6 +150,8 @@ impl SettingsState {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Settings::default(),
             Err(error) => return Err(error.into()),
         };
+        // A hand-edited file could hide the tray without quitting on close.
+        settings.show_tray_icon |= !settings.quit_on_window_close;
         settings.validate()?;
         // Reflect the actual OS entry, including changes made outside Caprine.
         settings.launch_at_login = app.autolaunch().is_enabled()?;
@@ -250,6 +264,9 @@ fn apply_native(app: &tauri::AppHandle, old: &Settings, new: &Settings) -> Resul
         }
         .map_err(|e| e.to_string())?;
     }
+    if old.show_tray_icon != new.show_tray_icon {
+        crate::tray::set_visible(app, new.show_tray_icon)?;
+    }
     if old.spell_check != new.spell_check {
         crate::engine::set_spell_check(&window, new.spell_check)?;
     }
@@ -264,6 +281,7 @@ mod tests {
         let settings: Settings = serde_json::from_str(r#"{"debugNotifications":true}"#).unwrap();
         assert!(settings.debug_notifications);
         assert!(!settings.quit_on_window_close);
+        assert!(settings.show_tray_icon);
         assert_eq!(settings.zoom_factor, 1.0);
         assert_eq!(
             serde_json::from_slice::<Settings>(&serde_json::to_vec(&settings).unwrap()).unwrap(),
@@ -286,6 +304,19 @@ mod tests {
         }
         assert!(serde_json::from_str::<Settings>(r#"{"debugNotifications":"true"}"#).is_err());
         assert!(serde_json::from_str::<Settings>(r#"{"privateMode":true}"#).is_err());
+    }
+    #[test]
+    fn the_tray_can_only_be_hidden_while_closing_quits() {
+        assert!(Settings::default()
+            .updated(Update::ShowTrayIcon(false))
+            .is_err());
+        let hidden = Settings::default()
+            .updated(Update::QuitOnWindowClose(true))
+            .and_then(|s| s.updated(Update::ShowTrayIcon(false)))
+            .unwrap();
+        assert!(!hidden.show_tray_icon);
+        let running = hidden.updated(Update::QuitOnWindowClose(false)).unwrap();
+        assert!(running.show_tray_icon && !running.quit_on_window_close);
     }
     #[test]
     fn oled_theme_parses_and_uses_native_dark() {

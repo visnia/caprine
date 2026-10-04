@@ -8,6 +8,7 @@ export type Settings = {
 	launchAtLogin: boolean;
 	launchMinimized: boolean;
 	quitOnWindowClose: boolean;
+	showTrayIcon: boolean;
 	showUnreadBadge: boolean;
 	debugNotifications: boolean;
 	muteNotifications: boolean;

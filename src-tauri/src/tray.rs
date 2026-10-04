@@ -95,8 +95,17 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
                 }
             }
         });
-    builder.build(app)?;
+    let tray = builder.build(app)?;
+    let settings = app.state::<crate::settings::SettingsState>().get();
+    tray.set_visible(settings.show_tray_icon)?;
     Ok(())
+}
+
+pub fn set_visible(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
+    app.tray_by_id("main-tray")
+        .ok_or("Tray is unavailable")?
+        .set_visible(visible)
+        .map_err(|e| e.to_string())
 }
 
 pub fn park(app: &tauri::AppHandle) -> Result<(), String> {
@@ -108,6 +117,15 @@ pub fn park(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or("Main window is unavailable")?;
+    // Without a tray icon there is nothing to restore a parked window from,
+    // so Launch minimized keeps it on the taskbar instead.
+    if !app
+        .state::<crate::settings::SettingsState>()
+        .get()
+        .show_tray_icon
+    {
+        return window.minimize().map_err(|e| e.to_string());
+    }
     #[cfg(target_os = "windows")]
     {
         // Wry leaves the controller visible when the HWND is minimized. Never
