@@ -16,6 +16,12 @@ export type CollectorEvent = {
 type Thread = {threadId: string; threadUrl: string; title: string; body: string; icon: HTMLImageElement | null};
 const bound = (value: unknown, limit: number) => typeof value === 'string' ? value.slice(0, limit) : '';
 
+function visibleText(element: Element): string {
+	const clone = element.cloneNode(true) as Element;
+	for (const hidden of clone.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+	return clone.textContent?.trim() ?? '';
+}
+
 export function sidebarThreads(document: Document): Map<string, Thread> {
 	const threads = new Map<string, Thread>();
 	for (const list of document.querySelectorAll(selectors.conversationLists)) {
@@ -23,8 +29,10 @@ export function sidebarThreads(document: Document): Map<string, Thread> {
 			const link = row.querySelector<HTMLAnchorElement>(selectors.threadLinks);
 			const threadId = link && threadIdFromHref(link.getAttribute('href') ?? '');
 			if (!threadId || !link) continue;
-			const text = [...row.querySelectorAll(selectors.threadText)].filter(el => !el.closest(selectors.actionElements))
-				.map(el => el.textContent?.trim() ?? '').filter(Boolean);
+			// Separators are aria-hidden and the age is an <abbr>; neither is message text.
+			const text = [...row.querySelectorAll(selectors.threadText)]
+				.filter(el => !el.closest(selectors.actionElements) && !el.querySelector('abbr'))
+				.map(visibleText).filter(Boolean);
 			const title = text[0] || link.getAttribute('aria-label') || link.textContent?.trim() || 'Messenger';
 			threads.set(threadId, {threadId, threadUrl: new URL(link.getAttribute('href')!, 'https://www.messenger.com').href,
 				title: bound(title, 256), body: bound(text.slice(1).join(' · ') || row.getAttribute('aria-label') || '', 2048),
@@ -68,6 +76,18 @@ function imageData(image: HTMLImageElement | null): string | null {
 		canvas.getContext('2d')?.drawImage(image, 0, 0, 64, 64);
 		return canvas.toDataURL('image/png');
 	} catch { return null; } // Cross-origin avatars may be unreadable; never delay delivery.
+}
+
+// Switch threads the way a sidebar click does. A full page load of an end-to-end
+// encrypted thread leaves its messages unloaded, so that is only the last resort.
+export function openThread(document: Document, url: string) {
+	const target = threadIdFromHref(url);
+	if (!target) return;
+	const link = [...document.querySelectorAll(selectors.conversationLists)]
+		.flatMap(list => [...list.querySelectorAll<HTMLAnchorElement>(selectors.threadLinks)])
+		.find(candidate => threadIdFromHref(candidate.getAttribute('href') ?? '') === target);
+	if (link) link.click();
+	else document.location.assign(url);
 }
 
 export function installCollector(report: (event: CollectorEvent) => Promise<unknown>) {
@@ -117,10 +137,28 @@ export function installCollector(report: (event: CollectorEvent) => Promise<unkn
 			return result;
 		};
 	}
-	return {startSidebar() {
+	// Messenger plays its message tone for every incoming message, including one
+	// whose preview repeats in an already-unread chat (no sidebar change at all).
+	// Patched at document start, before Messenger can cache the prototype method.
+	let onMessageSound: (() => void) | undefined;
+	if (typeof HTMLMediaElement !== 'undefined') {
+		const play = HTMLMediaElement.prototype.play;
+		HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+			// Calls ring in a loop and videos are media, not message tones.
+			if (!this.loop && !(this instanceof HTMLVideoElement)) {
+				try { onMessageSound?.(); } catch (error) { console.error('[Caprine] Message sound hook failed', error); }
+			}
+			return Reflect.apply(play, this, []);
+		};
+	}
+	// Rows and the message tone settle for a few seconds after a load (the unread
+	// marker and a tone can arrive late); that is the baseline, not new messages.
+	return {startSidebar(settleMs = 5000) {
+		const settled = Date.now() + settleMs;
 		const known = new Map<string, {unread: boolean; preview: string}>();
 		let initialized = false;
 		let queued = false;
+		let lastSubmit = 0;
 		const scan = () => {
 			queued = false;
 			const unread = sidebarUnreadThreads(document);
@@ -129,8 +167,9 @@ export function installCollector(report: (event: CollectorEvent) => Promise<unkn
 				const previous = known.get(id);
 				// Initial/unseen virtualized rows are baselines, not new messages.
 				// Preview comparison detects a DOM change; backend dedupe uses IDs/time.
-				if (initialized && previous && state.unread && (!previous.unread || previous.preview !== state.preview)) {
+				if (initialized && Date.now() >= settled && previous && state.unread && (!previous.unread || previous.preview !== state.preview)) {
 					submit('sidebar', row.title, {body: row.body}, row);
+					lastSubmit = Date.now();
 				}
 				known.set(id, state);
 			}
@@ -144,6 +183,22 @@ export function installCollector(report: (event: CollectorEvent) => Promise<unkn
 		observer.observe(document.body, {subtree: true, childList: true, characterData: true, attributes: true,
 			attributeFilter: ['aria-label', 'href', 'role']});
 		scan();
-		return () => observer.disconnect();
+		onMessageSound = () => {
+			const heard = Date.now();
+			if (heard < settled) return;
+			// The tone plays just before Messenger re-renders the row. A changed
+			// preview reports itself; only an unchanged one needs the tone.
+			setTimeout(() => {
+				if (lastSubmit >= heard) return;
+				const unread = sidebarUnreadThreads(document);
+				// Rows are ordered by recency: the newest message's chat comes first.
+				// No unread row means the tone was for something else (e.g. sending).
+				const row = [...sidebarThreads(document).values()].find(candidate => unread.has(candidate.threadId));
+				if (!row) return;
+				submit('sidebar', row.title, {body: row.body}, row);
+				lastSubmit = Date.now();
+			}, 1000);
+		};
+		return () => { observer.disconnect(); onMessageSound = undefined; };
 	}};
 }

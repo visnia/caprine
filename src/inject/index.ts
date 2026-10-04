@@ -1,10 +1,11 @@
 import {invoke} from '@tauri-apps/api/core';
+import {listen} from '@tauri-apps/api/event';
 import {applyTheme, installStyles} from './styles';
 import {startServiceWorkerDiagnostics} from './service-worker-diagnostics';
 import {createSettingsClient, zoomUpdate, type Settings} from './settings';
 import {initializeSettingsPanel} from './settings-panel';
 import {observeUnread} from './unread';
-import {installCollector} from './collector';
+import {installCollector, openThread} from './collector';
 import {createSpellcheckController, installAutoplayGuard} from './media';
 import {observePageKind} from './page';
 
@@ -46,6 +47,8 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 			const panel = initializeSettingsPanel(settings, state.version, state.platform);
 			observeUnread(document, count => invoke('report_unread', {count}));
 			collector.startSidebar();
+			void listen<string>('open-thread', event => openThread(document, event.payload))
+				.catch(error => console.error('[Caprine] Could not listen for notification clicks', error));
 			document.addEventListener('keydown', event => {
 				if (!event.ctrlKey || event.altKey || event.metaKey) return;
 				if (event.code === 'Comma' || event.key === ',') {

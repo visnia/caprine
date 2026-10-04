@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap};
 use tauri::Manager;
 use webview2_com::{
     take_pwstr, Microsoft::Web::WebView2::Win32::*, NotificationCloseRequestedEventHandler,
-    NotificationReceivedEventHandler,
+    NotificationReceivedEventHandler, SetPermissionStateCompletedHandler,
 };
 use windows::{
     core::{Interface, HSTRING, PWSTR},
@@ -40,6 +40,36 @@ pub fn install(
     let core24 = core.cast::<ICoreWebView2_24>().map_err(|e| {
         format!("ICoreWebView2_24 unavailable (runtime 128.0.2739.15+ required): {e}")
     })?;
+    // The permission handler only sees new requests. A denial stored by an
+    // earlier build makes Messenger read `denied` and never ask again, so set
+    // the profile state before Messenger loads (this also makes it `granted`
+    // from the first page load, as in Electron).
+    let state_app = app.clone();
+    let granted = SetPermissionStateCompletedHandler::create(Box::new(move |result| {
+        if let Err(error) = result {
+            broker::send(
+                &state_app,
+                Event::Runtime(
+                    serde_json::json!({"source":"engine","decision":"error","reason":format!("notification_permission: {error}")}),
+                ),
+            );
+        }
+        Ok(())
+    }));
+    unsafe {
+        core24
+            .Profile()
+            .and_then(|profile| profile.cast::<ICoreWebView2Profile4>())
+            .and_then(|profile| {
+                profile.SetPermissionState(
+                    COREWEBVIEW2_PERMISSION_KIND_NOTIFICATIONS,
+                    &HSTRING::from(crate::policy::MESSENGER),
+                    COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                    &granted,
+                )
+            })
+    }
+    .map_err(|e| format!("Notification permission: {e}"))?;
     let handle = app.clone();
     let handler = NotificationReceivedEventHandler::create(Box::new(move |_, args| {
         let Some(args) = args else {

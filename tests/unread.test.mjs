@@ -8,7 +8,9 @@ import {parseHTML} from 'linkedom';
 const {outputFiles} = await build({entryPoints: ['src/inject/unread.ts'], bundle: true, write: false, format: 'iife', globalName: 'unread'});
 function page(body, title = 'Messenger') {
 	const {document, window} = parseHTML(`<html><head><title>${title}</title></head><body>${body}</body></html>`);
-	const context = vm.createContext({document, Element: window.Element, MutationObserver: window.MutationObserver, URL, queueMicrotask, console});
+	const context = vm.createContext({document, Element: window.Element, MutationObserver: window.MutationObserver, URL, queueMicrotask, console,
+		// linkedom has no cascade; class "wNNN" stands in for Messenger's weight classes.
+		getComputedStyle: element => ({fontWeight: /\bw(\d+)\b/.exec(element.getAttribute('class') ?? '')?.[1] ?? '400'})});
 	vm.runInContext(outputFiles[0].text, context);
 	return {document, api: context.unread};
 }
@@ -50,4 +52,12 @@ test('title and sidebar mutations update badges without an interval and suppress
 	document.title = 'Messenger';
 	await nextTurn();
 	assert.deepEqual(reports, [1, 0, 8]);
+});
+
+test('hidden unread text marks a row unread; the same words in a message or button do not', () => {
+	const marked = (id, marker, preview = 'hi') => `<div role="row"><a href="/e2ee/t/${id}/"><span dir="auto">Name</span>${marker}<span dir="auto"><span>${preview}</span></span></a>`
+		+ `<div role="button"><span>Nieprzeczytana wiadomość:</span></div></div>`;
+	const {document, api} = page(list(marked('1', '<div>Nieprzeczytana wiadomość:</div>') + marked('2', '<div>Unread message:</div>')
+		+ marked('3', '', 'Nieprzeczytana wiadomość:') + marked('4', '<div>Masz nieprzeczytaną wiadomość od Ani</div>')));
+	assert.deepEqual([...api.sidebarUnreadThreads(document)].sort(), ['1', '2']);
 });

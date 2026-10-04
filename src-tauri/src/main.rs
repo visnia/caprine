@@ -269,6 +269,7 @@ fn main() {
             window.set_zoom(settings.zoom_factor)?;
             tray::install(app.handle())?;
             tray::refresh(app.handle())?;
+            tray::start_blinking(app.handle());
             engine::install(&window, &settings)?;
             notifications::install(&window)?;
             update::start(app.handle());

@@ -6,7 +6,7 @@ Windows phase-3 sign-in persistence, settings/theme/zoom, Ctrl+0, close-to-tray,
 
 Quit any running Tauri Caprine using its tray menu, then open the latest `src-tauri/target/debug/caprine.exe`. Debug startup creates `Visnia/Caprine (Visnia) Debug.lnk` in the current user's Start Menu with AUMID `com.visnia.caprine`. Release installation creates its own required shortcut with that AUMID. Electron Caprine keeps its separate identity.
 
-In **Ctrl+,**, enable **Debug notifications**, **Unread badge**, **Message preview** and **Flash taskbar**; disable **Mute notifications** and **Quit on window close**. Enable Messenger's desktop notifications if its UI offers that option. Keep OS notifications enabled and Do Not Disturb off for timing tests. Quit Electron Caprine and other Messenger apps/tabs that can produce competing desktop toasts. Use two conversations, A and B, with another account/person sending incoming messages. Record send time, toast time, unread count and click destination.
+In **Ctrl+,**, enable **Debug notifications**, **Desktop notifications**, **Unread badge**, **Message preview** and **Flash taskbar**; disable **Quit on window close**. Enable Messenger's desktop notifications if its UI offers that option. Keep OS notifications enabled and Do Not Disturb off for timing tests. Quit Electron Caprine and other Messenger apps/tabs that can produce competing desktop toasts. Use two conversations, A and B, with another account/person sending incoming messages. Record send time, toast time, unread count and click destination.
 
 ## Checklist
 
@@ -14,13 +14,13 @@ In **Ctrl+,**, enable **Debug notifications**, **Unread badge**, **Message previ
 | --- | --- | --- |
 | Read baseline | Read all test conversations; reload/restart. | Read tray icon, no overlay. No replay of existing unread rows as new messages. |
 | Badge accuracy | Receive in A and B while another app is foreground. Read one, then both. | Count follows Messenger's title count; tray and overlay update without reloading. Multiple messages in one unread chat need not increase the unread-chat count. |
-| Focused, other thread | Focus Caprine on A; receive in B. | Exactly one notification; clicking opens B. |
-| Focused, same thread | Focus Caprine on A; receive in A. | No toast or flashing for that message. |
+| Unread blink | With a chat unread, put another app in front; then focus Caprine. | Tray icon alternates colour/grey and the taskbar badge appears/disappears about every 0.8 s; both turn steady within a second of focusing Caprine, and grey/no badge once everything is read. |
+| Focused | Focus Caprine on A; receive in A, then in B. | No toast or flashing for either; B shows as unread in the sidebar. |
 | Background window | Keep Caprine behind another app; receive in A. | Exactly one toast within a few seconds. Taskbar flashes when enabled; clicking focuses A. |
 | Hidden to tray | Close into the tray; receive in A and B. | Timely notifications with no sidebar copies; unread tray state changes. Clicking restores the correct conversation; overlay is correct when the taskbar entry returns. |
 | Repeated content | Send identical text twice within 30 seconds; then several quick messages in A and one in B. | Separate Messenger primary notifications are not swallowed by text dedupe. No extra sidebar copies. Messenger may group messages itself; compare source logs. |
 | Action Center | Let a banner time out while Caprine stays running in the tray; click its history entry. Also dismiss an entry manually. | Clicking still opens the correct conversation. Dismissed entries do not reappear. |
-| Preview and mute | Disable preview and receive; then enable mute and receive again. | Preview-off body is exactly `You have a new message`. Mute suppresses toast/flashing; badges still update. |
+| Preview and toggle | Disable preview and receive; then disable **Desktop notifications** and receive again. | Preview-off body is exactly `You have a new message`. With notifications off there is no toast or flashing; badges still update. |
 | Flash toggle | Disable/re-enable flashing while receiving with another app focused. | Toasts still arrive; flashing follows the setting. There is no taskbar button to flash while parked in the tray. |
 | 30+ minute idle | Leave Caprine in the tray, computer awake and connected, for at least 30 minutes. Receive in A and B without first opening Caprine. | Each primary notification arrives within a few seconds, without duplicates. Click destination and restored badge are correct. Record actual latency. |
 | Restart regression | Quit/relaunch, then receive a new message. | Login/settings persist; new messages notify normally without replaying old sidebar unread rows. |

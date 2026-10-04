@@ -25,12 +25,16 @@ function setup(body = '') {
 		}
 	}
 	window.Notification = NativeNotification;
+	class HTMLMediaElement { loop = false; play() { return Promise.resolve(); } }
+	class HTMLVideoElement extends HTMLMediaElement {}
+	const timers = [];
 	const context = vm.createContext({window, document, ServiceWorkerRegistration, Element: window.Element,
 		MutationObserver: window.MutationObserver, URL, queueMicrotask, console,
+		HTMLMediaElement, HTMLVideoElement, setTimeout: callback => timers.push(callback),
 		crypto: {randomUUID: () => 'document-1'}});
 	vm.runInContext(outputFiles[0].text, context);
 	const collector = context.collector.installCollector(async event => reports.push(JSON.parse(JSON.stringify(event))));
-	return {context, document, window, NativeNotification, ServiceWorkerRegistration, reports, constructed, collector};
+	return {context, document, window, NativeNotification, ServiceWorkerRegistration, reports, constructed, collector, HTMLMediaElement, HTMLVideoElement, timers};
 }
 
 test('Notification retains live permission, native construction/prototype and bound permission callbacks', async () => {
@@ -79,7 +83,7 @@ test('unknown tag/data never inherits the active conversation and explicit ident
 test('sidebar baselines virtualized rows and emits only unread transitions or changed unread previews', async () => {
 	const row = (id, unread, preview) => `<div role="row"><a href="/t/${id}"><span dir="auto">Alice ${id}</span><span dir="auto">${preview}</span></a><span class="state" aria-label="${unread ? 'Unread' : 'Read'}"></span></div>`;
 	const {document, collector, reports} = setup(`<nav role="navigation"><div role="grid">${row('1', true, 'old')}${row('2', false, 'read')}</div></nav>`);
-	const stop = collector.startSidebar();
+	const stop = collector.startSidebar(0);
 	await nextTurn(); assert.equal(reports.length, 0);
 	document.querySelectorAll('.state')[1].setAttribute('aria-label', 'Unread');
 	await nextTurn(); assert.equal(reports.length, 1); assert.equal(reports[0].threadId, '2');
@@ -90,4 +94,67 @@ test('sidebar baselines virtualized rows and emits only unread transitions or ch
 	document.querySelectorAll('[dir="auto"]')[1].textContent = 'new';
 	await nextTurn(); assert.equal(reports.length, 2);
 	stop();
+});
+
+test('sidebar reads the hidden unread marker and sends only the preview as the body', async () => {
+	const row = (id, unread, preview) => `<div role="row"><a href="/e2ee/t/${id}/"><span dir="auto"><span>Beata ${id}</span></span><div><span>${unread ? '<div>Nieprzeczytana wiadomość:</div>' : ''}<span dir="auto"><span>${preview}</span></span></span><span dir="auto"><span aria-hidden="true">·</span></span><span><span dir="auto"><abbr aria-label="2 min temu"><span>2 min</span></abbr></span></span></div></a></div>`;
+	const {document, collector, reports} = setup(`<nav role="navigation"><div role="grid">${row('1', false, 'old')}${row('2', true, 'unread')}</div></nav>`);
+	const stop = collector.startSidebar(0);
+	await nextTurn(); assert.equal(reports.length, 0);
+	// A message saying "nieprzeczytana" is message text, not the marker.
+	document.querySelectorAll('[dir="auto"] span')[1].textContent = 'nieprzeczytana';
+	await nextTurn(); assert.equal(reports.length, 0);
+	document.querySelector('[role="row"]').outerHTML = row('1', true, 'new message');
+	await nextTurn(); assert.equal(reports.length, 1);
+	assert.equal(reports[0].threadId, '1'); assert.equal(reports[0].title, 'Beata 1'); assert.equal(reports[0].body, 'new message');
+	stop();
+});
+
+test('the message tone reports a repeated preview the sidebar cannot see, once, and ignores calls, video and sending', async () => {
+	const row = (id, unread, preview) => `<div role="row"><a href="/e2ee/t/${id}/"><span dir="auto"><span>Teresa ${id}</span></span>${unread ? '<div>Nieprzeczytana wiadomość:</div>' : ''}<span dir="auto"><span>${preview}</span></span></a></div>`;
+	const {document, collector, reports, HTMLMediaElement, HTMLVideoElement, timers} = setup(`<nav role="navigation"><div role="grid">${row('1', false, 'mine')}${row('2', true, 'a')}</div></nav>`);
+	const stop = collector.startSidebar(0);
+	await nextTurn();
+	const tone = new HTMLMediaElement();
+	const ring = Object.assign(new HTMLMediaElement(), {loop: true});
+	await tone.play(); await ring.play(); await new HTMLVideoElement().play();
+	assert.equal(timers.length, 1);
+	timers.shift()();
+	// The second identical "a": topmost unread row, not the read chat above it.
+	assert.equal(reports.length, 1); assert.equal(reports[0].threadId, '2'); assert.equal(reports[0].body, 'a');
+	// A changed preview already reported this tone's message.
+	await tone.play();
+	document.querySelectorAll('[role="row"]')[1].outerHTML = row('2', true, 'b');
+	await nextTurn(); assert.equal(reports.length, 2);
+	timers.shift()(); assert.equal(reports.length, 2);
+	// No unread chat: the tone was not an incoming message.
+	document.querySelectorAll('[role="row"]')[1].outerHTML = row('2', false, 'b');
+	await nextTurn(); await tone.play(); timers.shift()();
+	assert.equal(reports.length, 2);
+	stop();
+	await tone.play(); assert.equal(timers.length, 0);
+});
+
+test('rows and tones settling right after a load are baseline, not new messages', async () => {
+	const row = (id, unread, preview) => `<div role="row"><a href="/e2ee/t/${id}/"><span dir="auto">Teresa</span>${unread ? '<div>Nieprzeczytana wiadomość:</div>' : ''}<span dir="auto">${preview}</span></a></div>`;
+	const {document, collector, reports, HTMLMediaElement, timers} = setup(`<nav role="navigation"><div role="grid">${row('1', false, 'a')}</div></nav>`);
+	const stop = collector.startSidebar(60_000);
+	await nextTurn();
+	document.querySelector('[role="row"]').outerHTML = row('1', true, 'a');
+	await nextTurn(); await new HTMLMediaElement().play();
+	assert.equal(timers.length, 0); assert.equal(reports.length, 0);
+	stop();
+});
+
+test('notification clicks switch threads through the sidebar link, falling back to a page load', () => {
+	const {document, context} = setup('<nav role="navigation"><div role="grid"><div role="row"><a href="/e2ee/t/1/">One</a></div></div></nav><main><a href="/e2ee/t/2/">In message</a></main>');
+	const clicked = [];
+	document.querySelector('a').addEventListener('click', event => { event.preventDefault(); clicked.push('1'); });
+	const assigned = [];
+	Object.defineProperty(document, 'location', {value: {assign: url => assigned.push(url)}});
+	context.collector.openThread(document, 'https://www.messenger.com/e2ee/t/1/');
+	context.collector.openThread(document, 'https://www.messenger.com/e2ee/t/2/');
+	context.collector.openThread(document, 'https://example.com/t/3/');
+	assert.deepEqual(clicked, ['1']);
+	assert.deepEqual(assigned, ['https://www.messenger.com/e2ee/t/2/']);
 });

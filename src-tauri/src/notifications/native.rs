@@ -6,7 +6,7 @@ mod platform;
 mod platform;
 
 use super::{Delivery, Event};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub fn install(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     let app = window.app_handle().clone();
@@ -69,6 +69,17 @@ pub fn activate(app: &tauri::AppHandle, delivery: &Delivery) {
                     handle.get_webview_window("main"),
                     thread.as_deref().and_then(super::thread_url),
                 ) {
+                    // A full load of an end-to-end encrypted thread leaves its
+                    // messages unloaded, so a loaded Messenger switches in-page.
+                    (Some(window), Some(url))
+                        if window
+                            .url()
+                            .is_ok_and(|current| crate::policy::is_messenger(&current)) =>
+                    {
+                        handle
+                            .emit_to("main", "open-thread", &url.1)
+                            .map_err(|e| e.to_string())
+                    }
                     (Some(window), Some(url)) => window
                         .navigate(url.1.parse().expect("validated thread URL"))
                         .map_err(|e| e.to_string()),

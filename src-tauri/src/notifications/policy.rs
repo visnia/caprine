@@ -68,16 +68,12 @@ pub fn metadata_match<'a>(
     }
     Some(first.0)
 }
-pub fn suppression(
-    muted: bool,
-    focused: bool,
-    active: Option<&str>,
-    incoming: Option<&str>,
-) -> Option<&'static str> {
+/// A focused window already shows Messenger, whichever thread got the message.
+pub fn suppression(muted: bool, focused: bool) -> Option<&'static str> {
     if muted {
         Some("muted")
-    } else if focused && incoming.is_some() && active == incoming {
-        Some("focused_same_thread")
+    } else if focused {
+        Some("focused")
     } else {
         None
     }
@@ -182,15 +178,11 @@ mod tests {
         assert!(a.decide(Some("k"), false, 5000).is_ok());
     }
     #[test]
-    fn focused_other_thread_and_unknown_thread_still_notify() {
-        assert_eq!(
-            suppression(false, true, Some("a"), Some("a")),
-            Some("focused_same_thread")
-        );
-        assert_eq!(suppression(false, true, Some("a"), Some("b")), None);
-        assert_eq!(suppression(false, false, Some("a"), Some("a")), None);
-        assert_eq!(suppression(false, true, None, None), None);
-        assert_eq!(suppression(true, false, None, Some("b")), Some("muted"));
+    fn only_an_unfocused_unmuted_window_notifies() {
+        assert_eq!(suppression(false, true), Some("focused"));
+        assert_eq!(suppression(false, false), None);
+        assert_eq!(suppression(true, false), Some("muted"));
+        assert_eq!(suppression(true, true), Some("muted"));
     }
     #[test]
     fn only_messenger_thread_urls_can_be_activated() {

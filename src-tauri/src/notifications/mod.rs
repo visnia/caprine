@@ -286,12 +286,7 @@ fn run(app: tauri::AppHandle, receiver: mpsc::Receiver<Event>) {
                 .and_then(|w| w.url().ok())
                 .and_then(|u| thread_url(u.as_str()))
                 .map(|v| v.0);
-            let suppressed = policy::suppression(
-                settings.mute_notifications,
-                focused,
-                active.as_deref(),
-                thread.as_ref().map(|v| v.0.as_str()),
-            );
+            let suppressed = policy::suppression(settings.mute_notifications, focused);
             // Suppressed fallback candidates did not own a displayed event and
             // must not consume a later real primary after focus/mute changes.
             let dedupe = if primary || suppressed.is_none() {

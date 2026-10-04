@@ -5,6 +5,18 @@ export function titleUnreadCount(title: string): number | null {
 	return match ? Math.min(Number(match[1] ?? match[2]), 1_000_000) : null;
 }
 
+function isUnreadRow(row: Element): boolean {
+	const labelled = [row, ...row.querySelectorAll(selectors.unreadLabels)];
+	if (labelled.some(element => {
+		if (element.closest(selectors.actionElements)) return false;
+		const label = element.getAttribute('aria-label') ?? '';
+		return selectors.unreadLabel.test(label) && !selectors.markUnreadAction.test(label);
+	})) return true;
+	return [...row.querySelectorAll('div, span')].some(element => element.children.length === 0
+		&& !element.closest(selectors.threadText) && !element.closest(selectors.actionElements)
+		&& selectors.unreadMarker.test(element.textContent?.trim() ?? ''));
+}
+
 export function sidebarUnreadThreads(document: Document): Set<string> {
 	const threads = new Set<string>();
 	for (const list of document.querySelectorAll(selectors.conversationLists)) {
@@ -12,12 +24,7 @@ export function sidebarUnreadThreads(document: Document): Set<string> {
 			const link = row.querySelector<HTMLAnchorElement>(selectors.threadLinks);
 			const threadId = link && threadIdFromHref(link.getAttribute('href') ?? '');
 			if (!threadId) continue;
-			const labelled = [row, ...row.querySelectorAll(selectors.unreadLabels)];
-			if (labelled.some(element => {
-				if (element.closest(selectors.actionElements)) return false;
-				const label = element.getAttribute('aria-label') ?? '';
-				return selectors.unreadLabel.test(label) && !selectors.markUnreadAction.test(label);
-			})) threads.add(threadId);
+			if (isUnreadRow(row)) threads.add(threadId);
 		}
 	}
 	return threads;

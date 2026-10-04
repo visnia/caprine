@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::{
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
+    time::Duration,
+};
 #[cfg(target_os = "windows")]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::{
@@ -17,6 +20,33 @@ pub const WINDOW_STATE: StateFlags = StateFlags::SIZE
 pub struct TrayState {
     pub unread: AtomicU32,
     parked: AtomicBool,
+    /// The off phase of the unread blink: grey tray icon, no taskbar badge.
+    dim: AtomicBool,
+}
+
+const BLINK: Duration = Duration::from_millis(800);
+
+/// Blinks the tray icon (colour/grey) and taskbar badge while chats are unread
+/// and the window is not focused; a focused window shows them steadily.
+pub fn start_blinking(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::Builder::new()
+        .name("caprine-tray-blink".into())
+        .spawn(move || loop {
+            std::thread::sleep(BLINK);
+            let state = app.state::<TrayState>();
+            let blinking = state.unread.load(Ordering::Relaxed) > 0
+                && !app
+                    .get_webview_window("main")
+                    .is_some_and(|w| w.is_focused().unwrap_or(false));
+            let dim = blinking && !state.dim.load(Ordering::Relaxed);
+            if state.dim.swap(dim, Ordering::Relaxed) != dim {
+                if let Err(error) = refresh(&app) {
+                    eprintln!("Tray blink failed: {error}");
+                }
+            }
+        })
+        .expect("tray blink worker");
 }
 
 pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -118,13 +148,15 @@ pub fn quit_app(app: &tauri::AppHandle) {
 }
 
 pub fn refresh(app: &tauri::AppHandle) -> Result<(), String> {
-    let count = app.state::<TrayState>().unread.load(Ordering::Relaxed);
+    let state = app.state::<TrayState>();
+    let count = state.unread.load(Ordering::Relaxed);
+    let lit = count > 0 && !state.dim.load(Ordering::Relaxed);
     let show_badge = app
         .state::<crate::settings::SettingsState>()
         .get()
         .show_unread_badge;
     let tray = app.tray_by_id("main-tray").ok_or("Tray is unavailable")?;
-    let icon = if count > 0 {
+    let icon = if lit {
         include_bytes!("../icons/tray-unread.png").as_slice()
     } else {
         include_bytes!("../icons/tray-read.png").as_slice()
@@ -141,7 +173,7 @@ pub fn refresh(app: &tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
         if let Some(window) = app.get_webview_window("main") {
             window
-                .set_overlay_icon(if show_badge && count > 0 {
+                .set_overlay_icon(if show_badge && lit {
                     Some(overlay(count))
                 } else {
                     None

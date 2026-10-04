@@ -72,7 +72,10 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 		return control;
 	};
 	type BooleanKey = {[K in keyof Settings]: Settings[K] extends boolean ? K : never}[keyof Settings];
-	const toggle = (parent: HTMLElement, label: string, description: string, setting: BooleanKey) => {
+	// An inverted toggle reads "on" when the stored setting is false.
+	const inverted = new Set<BooleanKey>();
+	const toggle = (parent: HTMLElement, label: string, description: string, setting: BooleanKey, invert = false) => {
+		if (invert) inverted.add(setting);
 		const container = row(parent, label, description);
 		const track = element('label', 'caprine-settings-toggle');
 		const input = element('input');
@@ -81,7 +84,7 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 		track.append(input, element('span'));
 		container.append(track);
 		controls.set(setting, input);
-		input.addEventListener('change', () => { void run(input, () => client.update({setting, value: input.checked} as SettingUpdate)); });
+		input.addEventListener('change', () => { void run(input, () => client.update({setting, value: input.checked !== invert} as SettingUpdate)); });
 	};
 	const action = (parent: HTMLElement, title: string, description: string, label: string, callback: () => Promise<unknown>) => {
 		const control = button(label);
@@ -122,7 +125,8 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 		? 'Underline misspellings in the message composer.'
 		: 'Underline misspellings using the system locale dictionaries.', 'spellCheck');
 	const notifications = section('Notifications');
-	toggle(notifications, 'Mute notifications', 'Suppress message notifications and taskbar flashing.', 'muteNotifications');
+	// Stored as muteNotifications, so existing settings files keep their meaning.
+	toggle(notifications, 'Desktop notifications', 'Show a notification and flash the taskbar for new messages while Caprine is not focused.', 'muteNotifications', true);
 	toggle(notifications, 'Message preview', 'Include message text in desktop notifications.', 'notificationPreview');
 	if (platform === 'windows') toggle(notifications, 'Flash taskbar', 'Flash the taskbar when a message notification arrives.', 'flashTaskbar');
 	const advanced = section('Advanced');
@@ -169,7 +173,7 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 		launcher.dataset.caprineTheme = settings.theme;
 		backdrop.dataset.caprineTheme = settings.theme;
 		for (const [key, control] of controls) {
-			if (control instanceof HTMLInputElement) control.checked = Boolean(settings[key]);
+			if (control instanceof HTMLInputElement) control.checked = Boolean(settings[key]) !== inverted.has(key as BooleanKey);
 			else control.value = String(settings[key]);
 		}
 		zoom.textContent = `${Math.round(settings.zoomFactor * 100)}%`;
