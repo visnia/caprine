@@ -112,6 +112,6 @@
 /* Tomorrow dark theme for code blocks */
 html.dark-mode ._wu0 {
 	--code-block-base: #c5c8c6;
-	--code-block-border: var(--base-ten);
-	color: var(--base);
+	--code-block-border: rgb(255 255 255 / 10%);
+	color: #000;
 }
