@@ -64,7 +64,6 @@ Release builds check `https://github.com/visnia/caprine/releases/latest/download
 | --- | --- |
 | Windows NSIS installer | Downloads and runs the installer in passive mode; Caprine exits and restarts. |
 | Linux AppImage | Replaces the AppImage, then restarts. |
-| Linux .deb | Installs with `dpkg -i` through `pkexec` (or a graphical/terminal `sudo` prompt), then restarts. |
 | Debug builds, raw binaries | Updates are unavailable. |
 
 ## Building
@@ -80,14 +79,14 @@ npm start                         # development run
 npm test                          # TypeScript checks and JavaScript tests
 npm run build:app -- --debug      # target/debug executable, no installer
 npm run dist:win:unsigned         # local NSIS installer without updater signatures
-npm run dist:linux:unsigned       # local AppImage and .deb without updater signatures
+npm run dist:linux:unsigned       # local AppImage without updater signatures
 ```
 
 Quit a running Caprine from its tray menu before starting another build; closing the window may only park it in the tray.
 
 `npm run dist:win` / `dist:linux` produce updater signatures and need `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
-Releases come from pushing a `v<version>` tag that matches `tauri.conf.json`. The Release workflow builds Windows NSIS and Linux AppImage + .deb, signs them, verifies the signed versions, writes `latest.json` and creates a **draft** GitHub release. Publishing the draft makes it visible to the updater. The workflow needs the two signing secrets above in the repository.
+Releases come from pushing a `v<version>` tag that matches `tauri.conf.json`. The Release workflow builds Windows NSIS and Linux AppImage, signs them, verifies the signed versions, writes `latest.json` and creates a **draft** GitHub release. Publishing the draft makes it visible to the updater. The workflow needs the two signing secrets above in the repository.
 
 ## Verification status
 

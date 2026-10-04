@@ -19,10 +19,10 @@ jobs:
           - os: windows-latest
             platform: windows
             bundles: nsis
-          # Older glibc baseline for the AppImage and .deb.
+          # Older glibc baseline for the AppImage.
           - os: ubuntu-22.04
             platform: linux
-            bundles: appimage,deb
+            bundles: appimage
     runs-on: ${{ matrix.os }}
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -85,4 +85,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --draft \
             --title "Caprine (Visnia) $GITHUB_REF_NAME" \
-            --notes "Windows: NSIS installer. Linux: AppImage and .deb. The in-app updater verifies the minisign signatures in latest.json."
+            --notes "Windows: NSIS installer. Linux: AppImage. The in-app updater verifies the minisign signatures in latest.json."

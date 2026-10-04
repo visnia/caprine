@@ -135,7 +135,7 @@ Grouped rows enumerate the directly used APIs, options and events, including cur
 
 | Package/helper | Disposition |
 | --- | --- |
-| `electron`, `electron-builder`, `electron-publish`, `@electron/remote`, Electron typings and transitive tooling | Remove from manifest and regenerate the lockfile. Tauri CLI/Cargo build and bundle Windows NSIS and Linux AppImage/deb. |
+| `electron`, `electron-builder`, `electron-publish`, `@electron/remote`, Electron typings and transitive tooling | Remove from manifest and regenerate the lockfile. Tauri CLI/Cargo build and bundle Windows NSIS and Linux AppImage. |
 | `electron-better-ipc` | Tauri invoke/events as above. |
 | `electron-store` | Rust-side `tauri-plugin-store`; validate the retained settings. The later user decision requires a fresh profile, with no legacy config import. |
 | `electron-updater.checkForUpdatesAndNotify()` | Rust-side `tauri-plugin-updater`, GitHub release metadata, signed artifacts and a real embedded public key. |
@@ -291,13 +291,13 @@ Updater support by format, from the 2.13.1 source: the plugin reads the bundle t
 
 - **NSIS** downloads, verifies and runs the installer in passive mode. Windows exits Caprine, and the installer restarts it.
 - **AppImage** replaces the running AppImage, then Caprine restarts.
-- **.deb** verifies the package, then runs `dpkg -i` through `pkexec`. It falls back to a zenity/kdialog password prompt or terminal `sudo`, then restarts.
+- **.deb** is no longer published (dropped after 3.0.0-alpha.2). `support()` rejects it, and `latest.json` has no `linux-x86_64-deb` or bare `linux-x86_64` key, so earlier .deb installs find no update and must switch to the AppImage manually.
 
-The public Tauri documentation only describes AppImage updater artifacts on Linux. Deb support comes from the plugin source and is unverified at runtime. Executables without a bundle marker (debug builds, CI artifacts) report updates as unavailable. Automatic checks run 60 s after startup and every 6 h while enabled. A found version is announced once, and installation always needs a click (toast or drawer).
+Executables without a bundle marker (debug builds, CI artifacts) report updates as unavailable. Automatic checks run 60 s after startup and every 6 h while enabled. A found version is announced once, and installation always needs a click (toast or drawer).
 
-`.github/workflows/release.yml` runs on `v*` tags that match `tauri.conf.json`. Windows builds NSIS; Ubuntu 22.04 builds AppImage and .deb. `scripts/release-artifacts.mjs` then renames them to URL-safe names. Any bundle the CLI did not sign is signed with `tauri signer sign --app-version`; the .deb is expected to need this. Every `.sig` must carry the release version. The publish job writes `latest.json` with `windows-x86_64[-nsis]`, `linux-x86_64[-appimage]` and `linux-x86_64-deb`, and creates a **draft**, non-prerelease GitHub release. Publishing the draft makes it the `latest` release the updater reads. `npm run dist:*` now requires the signing key; the `dist:*:unsigned` scripts disable updater artifacts for local packaging.
+`.github/workflows/release.yml` runs on `v*` tags that match `tauri.conf.json`. Windows builds NSIS; Ubuntu 22.04 builds the AppImage. `scripts/release-artifacts.mjs` then renames them to URL-safe names. Any bundle the CLI did not sign is signed with `tauri signer sign --app-version`. Every `.sig` must carry the release version. The publish job writes `latest.json` with `windows-x86_64[-nsis]` and `linux-x86_64-appimage`, and creates a **draft**, non-prerelease GitHub release. Publishing the draft makes it the `latest` release the updater reads. `npm run dist:*` now requires the signing key; the `dist:*:unsigned` scripts disable updater artifacts for local packaging.
 
-Local verification (Windows, 2026-10-04): a signed NSIS build produced `…x64-setup.exe.sig`. An independent `minisign-verify` 0.2.5 program (the updater's verifier) accepted it with the committed public key and rejected a one-byte modification. The trusted comment contains `version:3.0.0-alpha.1`. `release-artifacts.mjs collect windows` passed, and the unsigned script built successfully. Phase-5 commit c6493f8 passed both Windows and Linux CI jobs (run 37202305353), including Linux compilation, clippy and tests of the WebKitGTK engine, download and spell-check code. The Linux bundles, the CI release workflow, the deb/AppImage signatures and an actual update installation have **not** been run.
+Local verification (Windows, 2026-10-04): a signed NSIS build produced `…x64-setup.exe.sig`. An independent `minisign-verify` 0.2.5 program (the updater's verifier) accepted it with the committed public key and rejected a one-byte modification. The trusted comment contains `version:3.0.0-alpha.1`. `release-artifacts.mjs collect windows` passed, and the unsigned script built successfully. Phase-5 commit c6493f8 passed both Windows and Linux CI jobs (run 37202305353), including Linux compilation, clippy and tests of the WebKitGTK engine, download and spell-check code. The Linux bundles, the CI release workflow, the AppImage signature and an actual update installation have **not** been run.
 
 Continue with the requested commit sequence; the worker constraint does not block phases 2–3:
 
@@ -305,7 +305,7 @@ Continue with the requested commit sequence; the worker constraint does not bloc
 2. Scaffold and verify Messenger loading, CSS injection and persistent login.
 3. Tray, badge, Windows overlay, settings/config.
 4. Collector, native notification backends and focused-thread delivery policy.
-5. Remaining retained features, signed updater, Windows NSIS/Linux AppImage/deb release workflow.
+5. Remaining retained features, signed updater, Windows NSIS/Linux AppImage release workflow.
 6. Rewrite README for the implemented and tested scope.
 
 Tests must cover collector ordering and permission forwarding, unknown IDs, repeated identical messages, unread virtualized lists, active-versus-other conversation focus, IPC origin denial, URL unwrapping, persisted settings and invalid settings. Installed Windows and real Linux desktop tests must cover Action Center/D-Bus activation, real attachments, calls and device permission denial, offline startup/recovery, restart login, single instance, and timed delivery after at least 30 minutes idle. Build success alone cannot establish these acceptance criteria.

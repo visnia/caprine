@@ -57,12 +57,8 @@ pub fn support(bundle: Option<BundleType>) -> Result<&'static str, &'static str>
     match bundle {
         Some(BundleType::Nsis) => Ok("nsis"),
         Some(BundleType::AppImage) => Ok("appimage"),
-        // The plugin installs .deb through pkexec / a graphical sudo prompt.
-        Some(BundleType::Deb) => Ok("deb"),
         Some(_) => Err("This package format is not published for Caprine (Visnia)."),
-        None => {
-            Err("Updates are available only in installed release builds (NSIS, AppImage or .deb).")
-        }
+        None => Err("Updates are available only in installed release builds (NSIS or AppImage)."),
     }
 }
 
@@ -131,7 +127,7 @@ pub async fn check(app: &tauri::AppHandle) -> Status {
 
 /// Re-checks, verifies the signature while downloading, then installs.
 /// Windows: the plugin launches the NSIS installer and exits Caprine.
-/// Linux: AppImage/.deb are replaced in place, then Caprine restarts.
+/// Linux: the AppImage is replaced in place, then Caprine restarts.
 pub async fn install(app: &tauri::AppHandle) -> Status {
     if let Some(status) = unsupported() {
         return set(app, status);
@@ -249,7 +245,7 @@ mod tests {
     fn only_published_installed_formats_update() {
         assert_eq!(support(Some(BundleType::Nsis)), Ok("nsis"));
         assert_eq!(support(Some(BundleType::AppImage)), Ok("appimage"));
-        assert_eq!(support(Some(BundleType::Deb)), Ok("deb"));
+        assert!(support(Some(BundleType::Deb)).is_err());
         assert!(support(Some(BundleType::Msi)).is_err());
         assert!(support(Some(BundleType::Rpm)).is_err());
         assert!(support(None).is_err());
