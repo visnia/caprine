@@ -26,6 +26,9 @@ pub struct Settings {
     pub quit_on_window_close: bool,
     pub show_unread_badge: bool,
     pub debug_notifications: bool,
+    pub mute_notifications: bool,
+    pub notification_preview: bool,
+    pub flash_taskbar: bool,
 }
 
 impl Default for Settings {
@@ -39,6 +42,9 @@ impl Default for Settings {
             quit_on_window_close: false,
             show_unread_badge: true,
             debug_notifications: false,
+            mute_notifications: false,
+            notification_preview: true,
+            flash_taskbar: true,
         }
     }
 }
@@ -59,6 +65,9 @@ pub enum Update {
     QuitOnWindowClose(bool),
     ShowUnreadBadge(bool),
     DebugNotifications(bool),
+    MuteNotifications(bool),
+    NotificationPreview(bool),
+    FlashTaskbar(bool),
 }
 
 impl Settings {
@@ -86,6 +95,9 @@ impl Settings {
             Update::QuitOnWindowClose(v) => next.quit_on_window_close = v,
             Update::ShowUnreadBadge(v) => next.show_unread_badge = v,
             Update::DebugNotifications(v) => next.debug_notifications = v,
+            Update::MuteNotifications(v) => next.mute_notifications = v,
+            Update::NotificationPreview(v) => next.notification_preview = v,
+            Update::FlashTaskbar(v) => next.flash_taskbar = v,
         }
         next.validate()?;
         Ok(next)
@@ -146,6 +158,9 @@ impl SettingsState {
         drop(current);
         app.state::<crate::diagnostics::Diagnostics>()
             .set_enabled(next.debug_notifications);
+        if next.debug_notifications {
+            crate::notifications::log_runtime(app);
+        }
         crate::tray::refresh(app)?;
         app.emit_to("main", "settings-changed", &next)
             .map_err(|e| e.to_string())?;

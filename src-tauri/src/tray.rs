@@ -90,6 +90,7 @@ pub fn park(app: &tauri::AppHandle) -> Result<(), String> {
     app.state::<TrayState>()
         .parked
         .store(true, Ordering::Relaxed);
+    crate::notifications::log_runtime(app);
     Ok(())
 }
 
@@ -105,6 +106,7 @@ pub fn restore(app: &tauri::AppHandle) -> Result<(), String> {
     app.state::<TrayState>()
         .parked
         .store(false, Ordering::Relaxed);
+    crate::notifications::log_runtime(app);
     refresh(app)
 }
 

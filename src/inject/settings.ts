@@ -10,6 +10,9 @@ export type Settings = {
 	quitOnWindowClose: boolean;
 	showUnreadBadge: boolean;
 	debugNotifications: boolean;
+	muteNotifications: boolean;
+	notificationPreview: boolean;
+	flashTaskbar: boolean;
 };
 export type SettingUpdate = {[K in keyof Settings]: {setting: K; value: Settings[K]}}[keyof Settings];
 export type SettingsClient = ReturnType<typeof createSettingsClient>;

@@ -4,12 +4,14 @@ import {startServiceWorkerDiagnostics} from './service-worker-diagnostics';
 import {createSettingsClient, zoomUpdate, type Settings} from './settings';
 import {initializeSettingsPanel} from './settings-panel';
 import {observeUnread} from './unread';
+import {installCollector} from './collector';
 
-type Bootstrap = {version: string; customCss: string; customCssError: string | null; settings: Settings};
+type Bootstrap = {version: string; platform: 'windows' | 'linux'; customCss: string; customCssError: string | null; settings: Settings};
 
 // Navigation can take this script to another origin. The Rust capability
 // independently enforces IPC; only Messenger's top frame gets our integration.
 if (location.origin === 'https://www.messenger.com' && window === window.top) {
+	const collector = installCollector(event => invoke('collect_notification', {event}));
 	const ready = document.readyState === 'loading'
 		? new Promise<void>(resolve => document.addEventListener('DOMContentLoaded', () => resolve(), {once: true}))
 		: Promise.resolve();
@@ -33,8 +35,9 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 			const applySettings = (value: Settings) => { applyTheme(value.theme); applyDiagnostics(value); };
 			settings.subscribe(applySettings);
 			applySettings(settings.get());
-			const panel = initializeSettingsPanel(settings, state.version);
+			const panel = initializeSettingsPanel(settings, state.version, state.platform);
 			observeUnread(document, count => invoke('report_unread', {count}));
+			collector.startSidebar();
 			document.addEventListener('keydown', event => {
 				if (!event.ctrlKey || event.altKey || event.metaKey) return;
 				if (event.code === 'Comma' || event.key === ',') {

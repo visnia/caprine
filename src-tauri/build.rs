@@ -9,6 +9,7 @@ fn main() {
             "update_setting",
             "panel_action",
             "report_unread",
+            "collect_notification",
         ]),
     ))
     .expect("failed to build Caprine's Tauri context");

@@ -4,6 +4,7 @@
 compile_error!("Caprine supports Windows and Linux only");
 
 mod diagnostics;
+mod notifications;
 mod policy;
 mod settings;
 mod tray;
@@ -16,6 +17,7 @@ use tauri_plugin_opener::OpenerExt;
 #[serde(rename_all = "camelCase")]
 struct Bootstrap {
     version: String,
+    platform: &'static str,
     custom_css: String,
     custom_css_error: Option<String>,
     settings: settings::Settings,
@@ -48,6 +50,7 @@ fn bootstrap(app: tauri::AppHandle, webview: Webview) -> Result<Bootstrap, Strin
     };
     Ok(Bootstrap {
         version: app.package_info().version.to_string(),
+        platform: std::env::consts::OS,
         custom_css,
         custom_css_error,
         settings: app.state::<settings::SettingsState>().get(),
@@ -135,6 +138,18 @@ fn log_service_worker_inventory(
 }
 
 #[tauri::command]
+fn collect_notification(
+    app: tauri::AppHandle,
+    webview: Webview,
+    event: notifications::Collected,
+) -> Result<(), String> {
+    require_messenger(&webview)?;
+    event.validate()?;
+    app.state::<notifications::Broker>()
+        .send(notifications::Event::Page(event))
+}
+
+#[tauri::command]
 fn open_external(app: tauri::AppHandle, webview: Webview, url: String) -> Result<(), String> {
     require_messenger(&webview)?;
     open_link(&app, &url)
@@ -174,7 +189,7 @@ fn main() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::Builder::new().app_name(autostart_name).args(["--autostart"]).build())
         .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(tray::WINDOW_STATE).with_filter(|label| label == "main").build())
-        .invoke_handler(tauri::generate_handler![bootstrap, open_external, log_service_worker_inventory, get_settings, update_setting, panel_action, report_unread])
+        .invoke_handler(tauri::generate_handler![bootstrap, open_external, log_service_worker_inventory, get_settings, update_setting, panel_action, report_unread, collect_notification])
         .setup(|app| {
             let profile = app.path().app_local_data_dir()?.join("webview");
             fs::create_dir_all(&profile)?;
@@ -184,9 +199,11 @@ fn main() {
             app.manage(settings_state);
             app.manage(diagnostics::Diagnostics::new(app.handle(), settings.debug_notifications)?);
             app.manage(tray::TrayState::default());
+            app.manage(notifications::Broker::start(app.handle().clone()));
             let navigation_app = app.handle().clone();
             let popup_app = app.handle().clone();
-            let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(policy::MESSENGER.parse()?))
+            // Install engine hooks before Messenger can construct notifications.
+            let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External("about:blank".parse()?))
                 .title("Caprine")
                 .inner_size(1000.0, 720.0)
                 .min_inner_size(400.0, 300.0)
@@ -198,8 +215,14 @@ fn main() {
                 .disable_drag_drop_handler()
                 .zoom_hotkeys_enabled(false)
                 .initialization_script(include_str!("../../dist/inject.js"))
+                .on_permission_request(|webview, kind| {
+                    use tauri::webview::{PermissionKind, PermissionResponse};
+                    if matches!(kind, PermissionKind::Notifications) {
+                        if require_messenger(&webview).is_ok() { PermissionResponse::Allow } else { PermissionResponse::Deny }
+                    } else { PermissionResponse::Default }
+                })
                 .on_navigation(move |url| {
-                    if policy::is_messenger(url) || policy::is_authentication(url) {
+                    if url.as_str() == "about:blank" || policy::is_messenger(url) || policy::is_authentication(url) {
                         true
                     } else {
                         if let Err(error) = open_link(&navigation_app, url.as_str()) {
@@ -223,6 +246,7 @@ fn main() {
             window.set_zoom(settings.zoom_factor)?;
             tray::install(app.handle())?;
             tray::refresh(app.handle())?;
+            notifications::install(&window)?;
             let close_app = app.handle().clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {

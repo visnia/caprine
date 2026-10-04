@@ -1,0 +1,11 @@
+[package]
+name = "tauri-winrt-notification"
+version = "0.8.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/tauri-apps/winrt-notification"
+
+[dependencies]
+thiserror = "2"
+windows-version = "0.1"
+windows = { version = "0.62", features = ["Win32_Foundation", "Foundation_Collections", "Win32_System_SystemInformation", "Data_Xml_Dom", "UI_Notifications"] }

@@ -407,6 +407,10 @@ dependencies = [
 name = "caprine"
 version = "3.0.0-alpha.1"
 dependencies = [
+ "base64 0.22.1",
+ "notify-rust",
+ "percent-encoding",
+ "png 0.18.1",
  "serde",
  "serde_json",
  "tauri",
@@ -416,7 +420,12 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
  "tauri-plugin-window-state",
+ "tauri-winrt-notification 0.8.1",
+ "tokio",
  "url",
+ "webkit2gtk",
+ "webview2-com",
+ "windows",
  "windows-sys 0.61.2",
 ]
 
@@ -2046,6 +2055,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "mac-notification-sys"
+version = "0.6.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd604973958ddcc11b561193c0fb96ba146506ef2f231ef2e7c35fd2cbc9beca"
+dependencies = [
+ "cc",
+ "log",
+ "objc2",
+ "objc2-foundation",
+ "time",
+ "uuid",
+]
+
+[[package]]
 name = "markup5ever"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2185,6 +2208,20 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+]
+
+[[package]]
+name = "notify-rust"
+version = "4.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe430c879247371c47fdedd328ad4e301e6b30b533c5fd5db1c06d75253d0e46"
+dependencies = [
+ "futures-lite",
+ "log",
+ "mac-notification-sys",
+ "serde",
+ "tauri-winrt-notification 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zbus",
 ]
 
 [[package]]
@@ -3816,6 +3853,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-winrt-notification"
+version = "0.8.1"
+dependencies = [
+ "thiserror 2.0.21",
+ "windows",
+ "windows-version",
+]
+
+[[package]]
+name = "tauri-winrt-notification"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f37a6c354fd28fc9e322ed9bd47e3959576dad28c9d58ea1cf888cce1c7ccb36"
+dependencies = [
+ "thiserror 2.0.21",
+ "windows",
+ "windows-version",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3933,8 +3990,10 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
+ "tracing",
  "windows-sys 0.61.2",
 ]
 
@@ -4963,6 +5022,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_repr",
+ "tokio",
  "tracing",
  "uds_windows",
  "uuid",

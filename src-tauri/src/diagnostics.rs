@@ -59,6 +59,12 @@ impl Diagnostics {
         self.enabled.store(enabled, Ordering::Relaxed);
     }
 
+    pub fn notification(&self, value: serde_json::Value) {
+        if let Err(error) = self.append(&value) {
+            eprintln!("Could not write notification diagnostics: {error}");
+        }
+    }
+
     pub fn record(&self, sample: WorkerSample) -> Result<(), String> {
         if !self.enabled.load(Ordering::Relaxed) {
             return Ok(());
@@ -79,7 +85,14 @@ impl Diagnostics {
             source: "serviceWorkerInventory",
             sample,
         };
-        let mut line = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
+        self.append(&record)
+    }
+
+    fn append(&self, record: &impl serde::Serialize) -> Result<(), String> {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        let mut line = serde_json::to_vec(record).map_err(|e| e.to_string())?;
         line.push(b'\n');
         let _writer = self.writer.lock().map_err(|e| e.to_string())?;
         if self

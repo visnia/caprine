@@ -4,6 +4,8 @@ export const selectors = {
 	conversationLists: '[role="navigation"] [role="grid"], nav [role="grid"], [role="navigation"] [role="list"]',
 	conversationRows: '[role="row"], [role="listitem"]',
 	threadLinks: 'a[href*="/t/"]',
+	threadText: '[dir="auto"]',
+	avatar: 'img',
 	unreadLabels: '[aria-label]',
 	actionElements: 'button, [role="button"], [role="menu"], [role="tooltip"]',
 	caprineUi: '#caprine-settings-launcher, #caprine-settings-backdrop',

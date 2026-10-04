@@ -28,6 +28,7 @@ test('startup inventory reaches the narrow IPC command before DOM readiness', as
 	window.top = window;
 	vm.runInNewContext(script, {
 		window,
+		crypto: {randomUUID: () => 'test-document'},
 		location: {origin: 'https://www.messenger.com'},
 		document: {readyState: 'loading', addEventListener() {}},
 		navigator: {serviceWorker: {getRegistrations: async () => [], controller: null}},
@@ -51,9 +52,9 @@ test('remote capability has only app commands, exact origin, and no local access
 	assert.equal(capability.local, false);
 	assert.deepEqual(capability.remote.urls, ['https://www.messenger.com']);
 	assert.deepEqual(capability.webviews, ['main']);
-	assert.deepEqual(capability.permissions, ['allow-bootstrap', 'allow-open-external', 'allow-log-service-worker-inventory', 'allow-get-settings', 'allow-update-setting', 'allow-panel-action', 'allow-report-unread', 'core:event:allow-listen', 'core:event:allow-unlisten']);
+	assert.deepEqual(capability.permissions, ['allow-bootstrap', 'allow-open-external', 'allow-log-service-worker-inventory', 'allow-get-settings', 'allow-update-setting', 'allow-panel-action', 'allow-report-unread', 'allow-collect-notification', 'core:event:allow-listen', 'core:event:allow-unlisten']);
 	const manifest = await readFile(new URL('../src-tauri/build.rs', import.meta.url), 'utf8');
-	for (const command of ['bootstrap', 'open_external', 'log_service_worker_inventory', 'get_settings', 'update_setting', 'panel_action', 'report_unread']) {
+	for (const command of ['bootstrap', 'open_external', 'log_service_worker_inventory', 'get_settings', 'update_setting', 'panel_action', 'report_unread', 'collect_notification']) {
 		assert.ok(manifest.includes(`"${command}"`), `${command} must be registered in the app ACL`);
 	}
 });

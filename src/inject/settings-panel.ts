@@ -14,7 +14,7 @@ const button = (text: string, className = 'caprine-settings-action') => {
 	return node;
 };
 
-export function initializeSettingsPanel(client: SettingsClient, version: string) {
+export function initializeSettingsPanel(client: SettingsClient, version: string, platform: 'windows' | 'linux') {
 	const launcher = button('', 'caprine-settings-launcher');
 	launcher.id = 'caprine-settings-launcher';
 	launcher.title = 'Caprine Settings (Ctrl+,)';
@@ -113,6 +113,10 @@ export function initializeSettingsPanel(client: SettingsClient, version: string)
 	toggle(behavior, 'Launch at login', 'Start Caprine when you sign in to your computer.', 'launchAtLogin');
 	toggle(behavior, 'Launch minimized', 'Start in the system tray.', 'launchMinimized');
 	toggle(behavior, 'Quit on window close', 'Exit instead of keeping Caprine in the system tray.', 'quitOnWindowClose');
+	const notifications = section('Notifications');
+	toggle(notifications, 'Mute notifications', 'Suppress message notifications and taskbar flashing.', 'muteNotifications');
+	toggle(notifications, 'Message preview', 'Include message text in desktop notifications.', 'notificationPreview');
+	if (platform === 'windows') toggle(notifications, 'Flash taskbar', 'Flash the taskbar when a message notification arrives.', 'flashTaskbar');
 	const advanced = section('Advanced');
 	toggle(advanced, 'Debug notifications', 'Record notification diagnostics in the app data folder.', 'debugNotifications');
 	action(advanced, 'Custom styles', 'Edit custom.css, then press Ctrl+R to apply changes.', 'Open CSS', () => invoke('panel_action', {action: 'customStyles'}));
