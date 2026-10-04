@@ -54,7 +54,7 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &quit])?;
     let builder = TrayIconBuilder::with_id("main-tray")
-        .icon(Image::from_bytes(include_bytes!("../icons/tray-read.png"))?)
+        .icon(tray_icon(false)?)
         .tooltip("Caprine (Visnia)")
         .menu(&menu)
         .on_menu_event(|app, event| {
@@ -156,12 +156,7 @@ pub fn refresh(app: &tauri::AppHandle) -> Result<(), String> {
         .get()
         .show_unread_badge;
     let tray = app.tray_by_id("main-tray").ok_or("Tray is unavailable")?;
-    let icon = if lit {
-        include_bytes!("../icons/tray-unread.png").as_slice()
-    } else {
-        include_bytes!("../icons/tray-read.png").as_slice()
-    };
-    tray.set_icon(Some(Image::from_bytes(icon).map_err(|e| e.to_string())?))
+    tray.set_icon(Some(tray_icon(lit).map_err(|e| e.to_string())?))
         .map_err(|e| e.to_string())?;
     #[cfg(target_os = "windows")]
     {
@@ -189,6 +184,63 @@ pub fn refresh(app: &tauri::AppHandle) -> Result<(), String> {
     }))
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn tray_icon(lit: bool) -> tauri::Result<Image<'static>> {
+    let image = Image::from_bytes(if lit {
+        include_bytes!("../icons/tray-unread.png").as_slice()
+    } else {
+        include_bytes!("../icons/tray-read.png").as_slice()
+    })?;
+    // The shell shrinks oversized tray icons with a crude filter that leaves
+    // jagged edges, so hand it one at exactly the small-icon size.
+    #[cfg(target_os = "windows")]
+    let image = {
+        use windows_sys::Win32::UI::{
+            HiDpi::{GetDpiForSystem, GetSystemMetricsForDpi},
+            WindowsAndMessaging::SM_CXSMICON,
+        };
+        let size = unsafe { GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem()) };
+        downscale(&image, size.max(1) as u32)
+    };
+    Ok(image)
+}
+
+/// Box-filters a square image down to `size`, averaging colour weighted by
+/// alpha so transparent pixels do not darken the edges.
+#[cfg(any(target_os = "windows", test))]
+fn downscale(image: &Image<'_>, size: u32) -> Image<'static> {
+    let (width, src) = (image.width(), image.rgba());
+    let scale = width as f32 / size as f32;
+    let mut rgba = Vec::with_capacity((size * size * 4) as usize);
+    for oy in 0..size {
+        let (y0, y1) = (oy as f32 * scale, (oy + 1) as f32 * scale);
+        for ox in 0..size {
+            let (x0, x1) = (ox as f32 * scale, (ox + 1) as f32 * scale);
+            let mut sum = [0f32; 4];
+            for y in y0 as u32..(y1.ceil() as u32).min(width) {
+                let wy = y1.min(y as f32 + 1.0) - y0.max(y as f32);
+                for x in x0 as u32..(x1.ceil() as u32).min(width) {
+                    let weight = wy * (x1.min(x as f32 + 1.0) - x0.max(x as f32));
+                    let p = ((y * width + x) * 4) as usize;
+                    let alpha = src[p + 3] as f32 * weight;
+                    for c in 0..3 {
+                        sum[c] += src[p + c] as f32 * alpha;
+                    }
+                    sum[3] += alpha;
+                }
+            }
+            for c in 0..3 {
+                rgba.push(if sum[3] > 0.0 {
+                    (sum[c] / sum[3]).round() as u8
+                } else {
+                    0
+                });
+            }
+            rgba.push((sum[3] / (scale * scale)).round().min(255.0) as u8);
+        }
+    }
+    Image::new_owned(rgba, size, size)
 }
 
 #[cfg(any(target_os = "windows", test))]
@@ -252,5 +304,29 @@ mod tests {
         assert_ne!(overlay(1).rgba(), overlay(2).rgba());
         assert_eq!(overlay(100).rgba(), overlay(u32::MAX).rgba());
         assert_ne!(overlay(99).rgba(), overlay(100).rgba());
+    }
+
+    #[test]
+    fn downscale_averages_colour_and_coverage() {
+        // Left half opaque red, right half transparent black.
+        let mut rgba = Vec::new();
+        for _ in 0..96 {
+            for x in 0..96 {
+                rgba.extend_from_slice(if x < 48 { &[255, 0, 0, 255] } else { &[0; 4] });
+            }
+        }
+        let small = downscale(&Image::new_owned(rgba, 96, 96), 15);
+        assert_eq!((small.width(), small.height()), (15, 15));
+        let px = |x: usize| &small.rgba()[x * 4..x * 4 + 4];
+        assert_eq!(px(0), [255, 0, 0, 255]);
+        assert_eq!(px(14), [0, 0, 0, 0]);
+        // The column straddling the edge is partially covered, not darkened.
+        let edge = px(7);
+        assert_eq!(&edge[..3], [255, 0, 0]);
+        assert!(edge[3] > 0 && edge[3] < 255);
+        assert_eq!(
+            downscale(&tray_icon(true).unwrap(), 16).rgba().len(),
+            16 * 16 * 4
+        );
     }
 }
