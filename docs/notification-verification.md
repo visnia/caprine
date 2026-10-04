@@ -33,7 +33,7 @@ Windows: `%APPDATA%\com.visnia.caprine\notifications.jsonl`. Linux: `$XDG_DATA_H
 
 - `notification` / `showNotification`: page metadata, including bounded actual `tag` and serialized `data`; these records never present another toast.
 - `webview2` / `webkitgtk`: native owner. Correlation records include `metadataSource`, `eventId` and `threadId` when known. Investigate `uncorrelated_native` for normal messages.
-- `sidebar`: fallback candidate. `recent_primary_for_thread` or `fallback_already_owned_one_event` explains cross-source suppression. Separate primary events are never deduped by text.
+- `sidebar`: fallback candidate. `recent_primary_for_thread`, `recent_unknown_primary` or `fallback_already_owned_one_event` explains cross-source suppression. Manually marking a chat unread can create a sidebar candidate; report whether that produces a toast. Separate primary events are never deduped by text.
 - `show` / `suppress`: backend decision with focused/active-thread evidence. `winrt` / `notify-rust` `submitted` means the API accepted the toast, not proof it appeared on screen. Errors are logged separately.
 - `activation`: click and destination. Unknown threads restore the window without guessing a conversation; that does not pass correct-thread acceptance.
 - `webview2State`: runtime version and actual controller visibility, sampled on installation, enabling debug logging and tray park/restore. Expect `controllerVisible: true` in the tray. No `TrySuspend` is used.

@@ -85,6 +85,10 @@ pub fn suppression(
 #[derive(Default)]
 pub struct Arbitration {
     threads: HashMap<String, Seen>,
+    // A primary without a thread could be any conversation's message. The
+    // sidebar is a last resort, so it yields for the window instead of
+    // matching text against that primary.
+    unknown_primary: Option<u64>,
 }
 #[derive(Default)]
 struct Seen {
@@ -107,11 +111,19 @@ impl Arbitration {
         });
         let Some(thread) = thread else {
             return if primary {
+                self.unknown_primary = Some(now);
                 Ok(())
             } else {
                 Err("unknown_fallback_thread")
             };
         };
+        if !primary
+            && self
+                .unknown_primary
+                .is_some_and(|at| now.saturating_sub(at) <= WINDOW)
+        {
+            return Err("recent_unknown_primary");
+        }
         let seen = self.threads.entry(thread.into()).or_default();
         if primary {
             seen.primary = Some(now);
@@ -156,6 +168,18 @@ mod tests {
         assert!(a.decide(Some("a"), false, 6000).is_ok());
         assert!(a.decide(None, true, 6100).is_ok());
         assert!(a.decide(None, true, 6200).is_ok());
+    }
+    #[test]
+    fn unknown_primary_blocks_fallback_copies_but_never_other_primaries() {
+        let mut a = Arbitration::default();
+        assert!(a.decide(None, true, 0).is_ok());
+        assert_eq!(
+            a.decide(Some("g"), false, 1200),
+            Err("recent_unknown_primary")
+        );
+        assert!(a.decide(Some("g"), true, 1300).is_ok());
+        assert!(a.decide(Some("h"), true, 1400).is_ok());
+        assert!(a.decide(Some("k"), false, 5000).is_ok());
     }
     #[test]
     fn focused_other_thread_and_unknown_thread_still_notify() {
