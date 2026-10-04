@@ -28,7 +28,7 @@ jobs:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Require the updater signing key
         shell: bash
         run: |
@@ -39,7 +39,7 @@ jobs:
       - name: Check tag matches version
         shell: bash
         run: node -e "const v=require('./src-tauri/tauri.conf.json').version; if ('v'+v !== process.env.GITHUB_REF_NAME) { console.error('tag', process.env.GITHUB_REF_NAME, 'version', v); process.exit(1) }"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -57,7 +57,7 @@ jobs:
         run: npm run tauri -- build --bundles ${{ matrix.bundles }} -- --locked
       - name: Collect and verify signatures
         run: node scripts/release-artifacts.mjs collect ${{ matrix.platform }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.platform }}
           path: release/
@@ -69,8 +69,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: release
