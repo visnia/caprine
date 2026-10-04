@@ -2,6 +2,16 @@
 
 Phase 1, 2026-10-04. Baseline: `0826641` on `main`; working branch: `tauri`.
 
+## Fork identity (before phase 3)
+
+The user requested a fresh identity, **`com.visnia.caprine`**, without migrating the old identifier's data. Tauri app-data/config/cache paths and the explicit `app_local_data_dir()/webview` profile now derive from this identifier. No old-directory lookup, copy or cookie import is implemented. The earlier login-persistence result applies to the old test profile; a fresh sign-in is expected after this change.
+
+The Windows process calls `SetCurrentProcessExplicitAppUserModelID` with the configured identifier before creating any windows. The inspected NSIS 2.10.1 `SetLnkAppUserModelId` macro writes `${BUNDLEID}` to the shortcut property store, so the generated shortcut shares that identity. Its installer/uninstall keys and shortcut filenames also use `productName`; this fork therefore installs as **Caprine (Visnia)**, published by `visnia`, with its Start Menu shortcut under `Visnia`. The window title remains Caprine. `tauri-plugin-autostart` 2.7.0 is configured with `app_name(config.identifier)` and `--autostart`; its new entry is separate from Electron's. An NSIS uninstall hook cleans up that identifier-named entry only on uninstall, preserving it on updates.
+
+Package/Cargo homepage, repository, issue links and the configured updater endpoint point to `visnia/caprine`. The updater has no separate app-identifier field; it uses the application's configured identity and installer. Only its endpoint and signed-version requirement are configured here: registration and the real signing public key remain phase 5. No fake key or unsigned updater was added. Obsolete upstream README download instructions and Electron RPM/APT packaging were removed; original MIT copyright notices and historical source citations remain.
+
+Identity change validation: Rust compilation and all six current tests pass. Generated NSIS packaging and fresh-profile runtime checks remain to be performed; no installer has been run against the user's installed Electron application.
+
 **The Linux tray decision is resolved.** Use Tauri's normal menu behavior on Linux (left-click opens Show / Quit), and retain left-click window toggling on Windows. No separate tray backend; `ksni` is a possible later follow-up. Document the platform difference in the rewritten README. Tauri does not expose Linux tray click events to implement a custom toggle.
 
 **The worker gap is closed as “not applicable currently”, based on the user's in-app WebView2 measurement below.** It no longer blocks the notification phase. Microsoft still documents `ICoreWebView2_24::NotificationReceived` for non-persistent notifications only; this is not evidence of persistent/service-worker interception support. A document-start patch of `ServiceWorkerRegistration.prototype.showNotification` cannot patch the worker's separate JavaScript context. No worker coverage or absence of worker notifications may be inferred from an empty native-hook log.

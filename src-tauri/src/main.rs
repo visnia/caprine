@@ -75,6 +75,25 @@ fn open_link(app: &tauri::AppHandle, url: &str) -> Result<(), String> {
 }
 
 fn main() {
+    let context = tauri::generate_context!();
+    // Match the NSIS shortcut's AUMID before creating any native windows.
+    #[cfg(target_os = "windows")]
+    {
+        let app_id: Vec<u16> = context
+            .config()
+            .identifier
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let result = unsafe {
+            windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID(app_id.as_ptr())
+        };
+        assert!(
+            result >= 0,
+            "could not set Windows AppUserModelID: {result:#x}"
+        );
+    }
+    let autostart_name = context.config().identifier.clone();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {
@@ -85,6 +104,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_autostart::Builder::new().app_name(autostart_name).args(["--autostart"]).build())
         .invoke_handler(tauri::generate_handler![bootstrap, open_external, log_service_worker_inventory])
         .setup(|app| {
             let profile = app.path().app_local_data_dir()?.join("webview");
@@ -125,6 +145,6 @@ fn main() {
             builder.build()?;
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("could not run Caprine");
 }
