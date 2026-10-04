@@ -3,6 +3,7 @@
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
 compile_error!("Caprine supports Windows and Linux only");
 
+mod diagnostics;
 mod policy;
 
 use std::fs;
@@ -14,6 +15,8 @@ use tauri_plugin_opener::OpenerExt;
 struct Bootstrap {
     version: String,
     custom_css: String,
+    custom_css_error: Option<String>,
+    debug_notifications: bool,
 }
 
 fn require_messenger(webview: &Webview) -> Result<(), String> {
@@ -33,15 +36,30 @@ fn bootstrap(app: tauri::AppHandle, webview: Webview) -> Result<Bootstrap, Strin
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("custom.css");
-    let custom_css = match fs::read_to_string(path) {
-        Ok(css) => css,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => return Err(format!("Could not read custom.css: {error}")),
+    let (custom_css, custom_css_error) = match fs::read_to_string(path) {
+        Ok(css) => (css, None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (String::new(), None),
+        Err(error) => (
+            String::new(),
+            Some(format!("Could not read custom.css: {error}")),
+        ),
     };
     Ok(Bootstrap {
         version: app.package_info().version.to_string(),
         custom_css,
+        custom_css_error,
+        debug_notifications: app.state::<diagnostics::Diagnostics>().enabled,
     })
+}
+
+#[tauri::command]
+fn log_service_worker_inventory(
+    webview: Webview,
+    diagnostics: tauri::State<'_, diagnostics::Diagnostics>,
+    sample: diagnostics::WorkerSample,
+) -> Result<(), String> {
+    require_messenger(&webview)?;
+    diagnostics.record(sample)
 }
 
 #[tauri::command]
@@ -66,11 +84,13 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
-        .invoke_handler(tauri::generate_handler![bootstrap, open_external])
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![bootstrap, open_external, log_service_worker_inventory])
         .setup(|app| {
             let profile = app.path().app_local_data_dir()?.join("webview");
             fs::create_dir_all(&profile)?;
             fs::create_dir_all(app.path().app_data_dir()?)?;
+            app.manage(diagnostics::Diagnostics::load(app.handle())?);
             let navigation_app = app.handle().clone();
             let popup_app = app.handle().clone();
             let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(policy::MESSENGER.parse()?))

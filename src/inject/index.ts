@@ -1,7 +1,8 @@
 import {invoke} from '@tauri-apps/api/core';
 import {installStyles} from './styles';
+import {startServiceWorkerDiagnostics} from './service-worker-diagnostics';
 
-type Bootstrap = {version: string; customCss: string};
+type Bootstrap = {version: string; customCss: string; customCssError: string | null; debugNotifications: boolean};
 
 // Navigation can take this script to another origin. The Rust capability
 // independently enforces IPC; only Messenger's top frame gets our integration.
@@ -10,9 +11,14 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 		? new Promise<void>(resolve => document.addEventListener('DOMContentLoaded', () => resolve(), {once: true}))
 		: Promise.resolve();
 	const styled = ready.then(() => installStyles(''));
-	void Promise.all([styled, invoke<Bootstrap>('bootstrap')])
+	const bootstrap = invoke<Bootstrap>('bootstrap');
+	void bootstrap.then(state => {
+		startServiceWorkerDiagnostics(state.debugNotifications, sample => invoke('log_service_worker_inventory', {sample}));
+	}).catch(error => console.error('[Caprine] Could not initialize notification diagnostics', error));
+	void Promise.all([styled, bootstrap])
 		.then(([, state]) => {
 			installStyles(state.customCss);
+			if (state.customCssError) console.error('[Caprine]', state.customCssError);
 			document.documentElement.dataset.caprineVersion = state.version;
 			console.info('[Caprine] Messenger initialization complete');
 		})
