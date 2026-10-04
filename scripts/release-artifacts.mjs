@@ -16,7 +16,7 @@ const name = suffix => `Caprine-Visnia_${version}_${suffix}`;
 // Updater target keys: {os}-{arch}-{bundle} first, then {os}-{arch}.
 const artifacts = {
 	windows: [{directory: 'nsis', extension: '.exe', file: name('x64-setup.exe'), targets: ['windows-x86_64-nsis', 'windows-x86_64']}],
-	// No bare linux-x86_64 key: earlier .deb installs would fall back to it and
+	// No bare linux-x86_64 key: a .deb install would fall back to it and
 	// try to dpkg-install the AppImage.
 	linux: [
 		{directory: 'appimage', extension: '.AppImage', file: name('amd64.AppImage'), targets: ['linux-x86_64-appimage']},

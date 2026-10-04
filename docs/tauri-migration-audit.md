@@ -291,7 +291,7 @@ Updater support by format, from the 2.13.1 source: the plugin reads the bundle t
 
 - **NSIS** downloads, verifies and runs the installer in passive mode. Windows exits Caprine, and the installer restarts it.
 - **AppImage** replaces the running AppImage, then Caprine restarts.
-- **.deb** is no longer published (dropped after 3.0.0-alpha.2). `support()` rejects it, and `latest.json` has no `linux-x86_64-deb` or bare `linux-x86_64` key, so earlier .deb installs find no update and must switch to the AppImage manually.
+- **.deb** is not published (dropped before the first release). `support()` rejects it, and `latest.json` has no `linux-x86_64-deb` or bare `linux-x86_64` key, so locally built .deb installs find no update and must switch to the AppImage manually.
 
 Executables without a bundle marker (debug builds, CI artifacts) report updates as unavailable. Automatic checks run 60 s after startup and every 6 h while enabled. A found version is announced once, and installation always needs a click (toast or drawer).
 
