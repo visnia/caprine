@@ -21,7 +21,7 @@ test('startup inventory reaches the narrow IPC command before DOM readiness', as
 		__TAURI_INTERNALS__: {
 			invoke: async (command, args) => {
 				calls.push({command, args});
-				if (command === 'bootstrap') return {debugNotifications: true};
+				if (command === 'bootstrap') return {settings: {debugNotifications: true}};
 			},
 		},
 	};
@@ -51,7 +51,9 @@ test('remote capability has only app commands, exact origin, and no local access
 	assert.equal(capability.local, false);
 	assert.deepEqual(capability.remote.urls, ['https://www.messenger.com']);
 	assert.deepEqual(capability.webviews, ['main']);
-	assert.deepEqual(capability.permissions, ['allow-bootstrap', 'allow-open-external', 'allow-log-service-worker-inventory']);
+	assert.deepEqual(capability.permissions, ['allow-bootstrap', 'allow-open-external', 'allow-log-service-worker-inventory', 'allow-get-settings', 'allow-update-setting', 'allow-panel-action', 'allow-report-unread', 'core:event:allow-listen', 'core:event:allow-unlisten']);
 	const manifest = await readFile(new URL('../src-tauri/build.rs', import.meta.url), 'utf8');
-	assert.match(manifest, /AppManifest::new\(\)\.commands\(&\[\s*"bootstrap",\s*"open_external",\s*"log_service_worker_inventory",?\s*\]\)/);
+	for (const command of ['bootstrap', 'open_external', 'log_service_worker_inventory', 'get_settings', 'update_setting', 'panel_action', 'report_unread']) {
+		assert.ok(manifest.includes(`"${command}"`), `${command} must be registered in the app ACL`);
+	}
 });

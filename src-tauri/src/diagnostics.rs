@@ -2,11 +2,13 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::PathBuf,
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
-use tauri_plugin_store::StoreExt;
 
 const MAX_LOG_BYTES: u64 = 1024 * 1024;
 
@@ -38,50 +40,27 @@ pub enum WorkerSample {
 }
 
 pub struct Diagnostics {
-    pub enabled: bool,
+    enabled: AtomicBool,
     log_path: PathBuf,
     writer: Mutex<()>,
 }
 
-fn validate_settings(bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
-    let values: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(bytes)?;
-    if values
-        .get("debugNotifications")
-        .is_some_and(|v| !v.is_boolean())
-    {
-        return Err("settings.json: debugNotifications must be a boolean".into());
-    }
-    Ok(())
-}
-
 impl Diagnostics {
-    pub fn load(app: &tauri::AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(app: &tauri::AppHandle, enabled: bool) -> Result<Self, Box<dyn std::error::Error>> {
         let directory = app.path().app_data_dir()?;
-        // StoreBuilder 2.5.0 ignores initial load errors. Validate first so a
-        // malformed settings file cannot silently become defaults on save/exit.
-        match fs::read(directory.join("settings.json")) {
-            Ok(bytes) => validate_settings(&bytes)?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
-        }
-        let store = app
-            .store_builder("settings.json")
-            .default("debugNotifications", false)
-            .build()?;
-        let enabled = store
-            .get("debugNotifications")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        store.save()?;
         Ok(Self {
-            enabled,
+            enabled: AtomicBool::new(enabled),
             log_path: directory.join("notifications.jsonl"),
             writer: Mutex::new(()),
         })
     }
 
+    pub fn set_enabled(&self, enabled: bool) {
+        self.enabled.store(enabled, Ordering::Relaxed);
+    }
+
     pub fn record(&self, sample: WorkerSample) -> Result<(), String> {
-        if !self.enabled {
+        if !self.enabled.load(Ordering::Relaxed) {
             return Ok(());
         }
         #[derive(serde::Serialize)]
@@ -126,19 +105,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn invalid_settings_are_rejected_before_store_can_overwrite_them() {
-        assert!(validate_settings(br#"{"debugNotifications":true,"theme":"dark"}"#).is_ok());
-        assert!(validate_settings(b"{}").is_ok());
-        for bytes in [
-            b"broken".as_slice(),
-            b"[]",
-            br#"{"debugNotifications":"false"}"#,
-        ] {
-            assert!(validate_settings(bytes).is_err());
-        }
-    }
-
-    #[test]
     fn ipc_accepts_only_fixed_diagnostic_fields() {
         for value in [
             serde_json::json!({"trigger":"startup", "status":"ok", "registrationCount":0, "controlled":false}),
@@ -166,8 +132,8 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let mut diagnostics = Diagnostics {
-            enabled: false,
+        let diagnostics = Diagnostics {
+            enabled: AtomicBool::new(false),
             log_path: path.clone(),
             writer: Mutex::new(()),
         };
@@ -178,7 +144,7 @@ mod tests {
         };
         diagnostics.record(sample()).unwrap();
         assert!(!path.exists());
-        diagnostics.enabled = true;
+        diagnostics.set_enabled(true);
         fs::write(&path, vec![b' '; MAX_LOG_BYTES as usize]).unwrap();
         diagnostics.record(sample()).unwrap();
         let log = fs::read_to_string(&path).unwrap();

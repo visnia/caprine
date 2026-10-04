@@ -6,5 +6,5 @@
 	"remote": {"urls": ["https://www.messenger.com"]},
 	"webviews": ["main"],
 	"platforms": ["windows", "linux"],
-	"permissions": ["allow-bootstrap", "allow-open-external", "allow-log-service-worker-inventory"]
+	"permissions": ["allow-bootstrap", "allow-open-external", "allow-log-service-worker-inventory", "allow-get-settings", "allow-update-setting", "allow-panel-action", "allow-report-unread", "core:event:allow-listen", "core:event:allow-unlisten"]
 }

@@ -5,6 +5,8 @@ compile_error!("Caprine supports Windows and Linux only");
 
 mod diagnostics;
 mod policy;
+mod settings;
+mod tray;
 
 use std::fs;
 use tauri::{Manager, Webview, WebviewUrl, WebviewWindowBuilder};
@@ -16,7 +18,7 @@ struct Bootstrap {
     version: String,
     custom_css: String,
     custom_css_error: Option<String>,
-    debug_notifications: bool,
+    settings: settings::Settings,
 }
 
 fn require_messenger(webview: &Webview) -> Result<(), String> {
@@ -48,8 +50,78 @@ fn bootstrap(app: tauri::AppHandle, webview: Webview) -> Result<Bootstrap, Strin
         version: app.package_info().version.to_string(),
         custom_css,
         custom_css_error,
-        debug_notifications: app.state::<diagnostics::Diagnostics>().enabled,
+        settings: app.state::<settings::SettingsState>().get(),
     })
+}
+
+#[tauri::command]
+fn get_settings(app: tauri::AppHandle, webview: Webview) -> Result<settings::Settings, String> {
+    require_messenger(&webview)?;
+    Ok(app.state::<settings::SettingsState>().get())
+}
+
+#[tauri::command]
+fn update_setting(
+    app: tauri::AppHandle,
+    webview: Webview,
+    update: settings::Update,
+) -> Result<settings::Settings, String> {
+    require_messenger(&webview)?;
+    app.state::<settings::SettingsState>().update(&app, update)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum PanelAction {
+    CustomStyles,
+    Relaunch,
+    Quit,
+}
+
+#[tauri::command]
+fn panel_action(
+    app: tauri::AppHandle,
+    webview: Webview,
+    action: PanelAction,
+) -> Result<(), String> {
+    require_messenger(&webview)?;
+    match action {
+        PanelAction::CustomStyles => {
+            let path = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| e.to_string())?
+                .join("custom.css");
+            fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(|e| e.to_string())?;
+            app.opener()
+                .open_path(path.to_string_lossy(), None::<&str>)
+                .map_err(|e| e.to_string())?;
+        }
+        PanelAction::Relaunch => {
+            use tauri_plugin_window_state::AppHandleExt;
+            app.save_window_state(tray::WINDOW_STATE)
+                .map_err(|e| e.to_string())?;
+            app.restart();
+        }
+        PanelAction::Quit => tray::quit_app(&app),
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn report_unread(app: tauri::AppHandle, webview: Webview, count: u32) -> Result<(), String> {
+    require_messenger(&webview)?;
+    if count > 1_000_000 {
+        return Err("Unread count exceeds supported range".into());
+    }
+    app.state::<tray::TrayState>()
+        .unread
+        .store(count, std::sync::atomic::Ordering::Relaxed);
+    tray::refresh(&app)
 }
 
 #[tauri::command]
@@ -96,30 +168,35 @@ fn main() {
     let autostart_name = context.config().identifier.clone();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            if let Err(error) = tray::restore(app) { eprintln!("Could not restore Caprine: {error}"); }
         }))
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::Builder::new().app_name(autostart_name).args(["--autostart"]).build())
-        .invoke_handler(tauri::generate_handler![bootstrap, open_external, log_service_worker_inventory])
+        .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(tray::WINDOW_STATE).with_filter(|label| label == "main").build())
+        .invoke_handler(tauri::generate_handler![bootstrap, open_external, log_service_worker_inventory, get_settings, update_setting, panel_action, report_unread])
         .setup(|app| {
             let profile = app.path().app_local_data_dir()?.join("webview");
             fs::create_dir_all(&profile)?;
             fs::create_dir_all(app.path().app_data_dir()?)?;
-            app.manage(diagnostics::Diagnostics::load(app.handle())?);
+            let settings_state = settings::SettingsState::load(app.handle())?;
+            let settings = settings_state.get();
+            app.manage(settings_state);
+            app.manage(diagnostics::Diagnostics::new(app.handle(), settings.debug_notifications)?);
+            app.manage(tray::TrayState::default());
             let navigation_app = app.handle().clone();
             let popup_app = app.handle().clone();
             let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(policy::MESSENGER.parse()?))
                 .title("Caprine")
                 .inner_size(1000.0, 720.0)
                 .min_inner_size(400.0, 300.0)
+                .always_on_top(settings.always_on_top)
+                .theme(settings.native_theme())
+                .visible(false)
                 .data_directory(profile)
                 .incognito(false)
                 .disable_drag_drop_handler()
+                .zoom_hotkeys_enabled(false)
                 .initialization_script(include_str!("../../dist/inject.js"))
                 .on_navigation(move |url| {
                     if policy::is_messenger(url) || policy::is_authentication(url) {
@@ -142,7 +219,25 @@ fn main() {
                 });
             #[cfg(target_os = "windows")]
             let builder = builder.additional_browser_args("--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows");
-            builder.build()?;
+            let window = builder.build()?;
+            window.set_zoom(settings.zoom_factor)?;
+            tray::install(app.handle())?;
+            tray::refresh(app.handle())?;
+            let close_app = app.handle().clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    if close_app.state::<settings::SettingsState>().get().quit_on_window_close {
+                        tray::quit_app(&close_app);
+                    } else if let Err(error) = tray::park(&close_app) {
+                        eprintln!("Could not close to tray: {error}");
+                    }
+                }
+            });
+            // Show the native window before minimizing; the child webview keeps
+            // its controller visibility. Saved visibility never traps startup.
+            window.show()?;
+            if settings.launch_minimized { tray::park(app.handle())?; }
             Ok(())
         })
         .run(context)

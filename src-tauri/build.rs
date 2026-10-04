@@ -5,6 +5,10 @@ fn main() {
             "bootstrap",
             "open_external",
             "log_service_worker_inventory",
+            "get_settings",
+            "update_setting",
+            "panel_action",
+            "report_unread",
         ]),
     ))
     .expect("failed to build Caprine's Tauri context");

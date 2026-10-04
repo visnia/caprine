@@ -83,7 +83,6 @@ html.caprine-settings-open {
 .caprine-settings-launcher:focus-visible,
 .caprine-settings-panel button:focus-visible,
 .caprine-settings-panel select:focus-visible,
-.caprine-settings-panel summary:focus-visible,
 .caprine-settings-panel input:focus-visible + span {
 	outline: 3px solid rgb(8 102 255 / 35%);
 	outline-offset: 2px;
@@ -103,7 +102,7 @@ html.caprine-settings-open {
 	background: rgb(0 0 0 / 28%);
 	opacity: 0%;
 	pointer-events: none;
-	transition: opacity 180ms ease, visibility 180ms ease;
+	transition: opacity 180ms ease;
 }
 
 .caprine-settings-backdrop.is-open {
@@ -129,9 +128,7 @@ html.caprine-settings-open {
 .caprine-settings-header h1,
 .caprine-settings-section h2,
 .caprine-settings-label,
-.caprine-settings-stepper,
-.caprine-settings-language-picker,
-.caprine-settings-language-picker summary {
+.caprine-settings-stepper {
 	color: var(--caprine-text) !important;
 }
 
@@ -184,39 +181,6 @@ html.caprine-settings-open {
 
 .caprine-settings-close:hover {
 	background: var(--caprine-surface-hover);
-}
-
-.caprine-settings-restart-notice {
-	display: none;
-	min-height: 42px;
-	padding: 8px 18px;
-	background: rgb(8 102 255 / 10%);
-	color: var(--caprine-text);
-	align-items: center;
-	font-size: 12px;
-	font-weight: 600;
-	gap: 12px;
-	justify-content: space-between;
-}
-
-.caprine-settings-restart-notice.is-visible {
-	display: flex;
-}
-
-.caprine-settings-restart-notice button {
-	padding: 7px 10px;
-	border: none;
-	border-radius: 7px;
-	background: var(--caprine-accent);
-	color: #fff;
-	cursor: pointer;
-	font-family: inherit;
-	font-size: 12px;
-	font-weight: 600;
-}
-
-.caprine-settings-restart-notice button:hover {
-	background: var(--caprine-accent-hover);
 }
 
 .caprine-settings-content {
@@ -417,184 +381,6 @@ html.caprine-settings-open {
 	font-weight: bold;
 }
 
-.caprine-settings-emoji-picker {
-	position: relative;
-	width: 150px;
-}
-
-.caprine-settings-emoji-picker summary {
-	position: relative;
-	display: flex;
-	min-height: 32px;
-	padding: 5px 28px 5px 8px;
-	border-radius: 8px;
-	background: var(--caprine-surface);
-	color: var(--caprine-text);
-	align-items: center;
-	cursor: pointer;
-	list-style: none;
-}
-
-.caprine-settings-emoji-picker summary::-webkit-details-marker {
-	display: none;
-}
-
-.caprine-settings-emoji-picker summary::after {
-	position: absolute;
-	top: 50%;
-	right: 10px;
-	width: 6px;
-	height: 6px;
-	border-right: 2px solid var(--caprine-secondary-text);
-	border-bottom: 2px solid var(--caprine-secondary-text);
-	content: '';
-	transform: translateY(-70%) rotate(45deg);
-	transition: transform 120ms ease;
-}
-
-.caprine-settings-emoji-picker[open] summary::after {
-	transform: translateY(-30%) rotate(225deg);
-}
-
-.caprine-settings-emoji-picker summary:focus-visible {
-	outline: 3px solid rgb(8 102 255 / 35%);
-	outline-offset: 2px;
-}
-
-.caprine-settings-emoji-menu {
-	position: absolute;
-	z-index: 4;
-	top: calc(100% + 6px);
-	right: 0;
-	display: grid;
-	width: 260px;
-	padding: 6px;
-	border: 1px solid var(--caprine-border);
-	border-radius: 10px;
-	background: var(--caprine-panel);
-	box-shadow: 0 10px 28px rgb(0 0 0 / 22%);
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 6px;
-}
-
-.caprine-settings-emoji-option {
-	position: relative;
-	display: block;
-	cursor: pointer;
-}
-
-.caprine-settings-emoji-option input {
-	position: absolute;
-	opacity: 0%;
-	pointer-events: none;
-}
-
-.caprine-settings-emoji-option > span {
-	display: flex;
-	min-height: 38px;
-	padding: 5px 8px;
-	border: 1px solid var(--caprine-border);
-	border-radius: 8px;
-	background: var(--caprine-panel);
-	color: var(--caprine-text) !important;
-	align-items: center;
-	gap: 7px;
-	transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
-}
-
-.caprine-settings-emoji-option:hover > span {
-	background: var(--caprine-surface);
-}
-
-.caprine-settings-emoji-option input:checked + span {
-	border-color: var(--caprine-accent);
-	background: rgb(8 102 255 / 10%);
-	box-shadow: inset 0 0 0 1px var(--caprine-accent);
-}
-
-.caprine-settings-emoji-option input:focus-visible + span {
-	outline: 3px solid rgb(8 102 255 / 35%);
-	outline-offset: 2px;
-}
-
-.caprine-settings-emoji-option img,
-.caprine-settings-emoji-selected img,
-.caprine-settings-system-emoji {
-	display: block;
-	width: 22px;
-	height: 22px;
-	flex: 0 0 22px;
-}
-
-.caprine-settings-system-emoji {
-	font-size: 19px;
-	line-height: 22px;
-	text-align: center;
-}
-
-.caprine-settings-emoji-label {
-	overflow: hidden;
-	font-size: 11px;
-	font-weight: 600;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.caprine-settings-emoji-selected,
-.caprine-settings-emoji-selected > span {
-	display: flex;
-	min-width: 0;
-	align-items: center;
-	gap: 7px;
-}
-
-.caprine-settings-language-picker {
-	margin: 6px 8px 10px;
-	border: 1px solid var(--caprine-border);
-	border-radius: 10px;
-}
-
-.caprine-settings-language-picker summary {
-	padding: 11px 12px;
-	cursor: pointer;
-	font-size: 13px;
-	font-weight: 600;
-}
-
-.caprine-settings-language-list {
-	display: grid;
-	max-height: 220px;
-	overflow: auto;
-	padding: 4px 8px 10px;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 2px 8px;
-}
-
-.caprine-settings-language {
-	display: flex;
-	min-width: 0;
-	padding: 6px 4px;
-	border-radius: 6px;
-	align-items: center;
-	cursor: pointer;
-	font-size: 12px;
-	gap: 7px;
-}
-
-.caprine-settings-language:hover {
-	background: var(--caprine-surface);
-}
-
-.caprine-settings-language span {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.caprine-settings-language input {
-	accent-color: var(--caprine-accent);
-}
-
 .caprine-settings-link-grid {
 	display: grid;
 	margin: 10px 8px;
@@ -623,14 +409,6 @@ html.caprine-settings-open {
 	.caprine-settings-panel {
 		width: 100vw;
 	}
-
-	.caprine-settings-language-list {
-		grid-template-columns: 1fr;
-	}
-
-	.caprine-settings-emoji-menu {
-		width: min(260px, calc(100vw - 32px));
-	}
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -642,3 +420,5 @@ html.caprine-settings-open {
 		transition: none;
 	}
 }
+
+.caprine-settings-error { padding: 10px 18px; color: var(--caprine-danger); font-size: 13px; }

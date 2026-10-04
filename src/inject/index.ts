@@ -1,8 +1,11 @@
 import {invoke} from '@tauri-apps/api/core';
-import {installStyles} from './styles';
+import {applyTheme, installStyles} from './styles';
 import {startServiceWorkerDiagnostics} from './service-worker-diagnostics';
+import {createSettingsClient, zoomUpdate, type Settings} from './settings';
+import {initializeSettingsPanel} from './settings-panel';
+import {observeUnread} from './unread';
 
-type Bootstrap = {version: string; customCss: string; customCssError: string | null; debugNotifications: boolean};
+type Bootstrap = {version: string; customCss: string; customCssError: string | null; settings: Settings};
 
 // Navigation can take this script to another origin. The Rust capability
 // independently enforces IPC; only Messenger's top frame gets our integration.
@@ -12,12 +15,40 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 		: Promise.resolve();
 	const styled = ready.then(() => installStyles(''));
 	const bootstrap = invoke<Bootstrap>('bootstrap');
+	let debugEnabled = false;
+	let stopDiagnostics: (() => void) | undefined;
+	const applyDiagnostics = (settings: Settings) => {
+		if (debugEnabled === settings.debugNotifications) return;
+		debugEnabled = settings.debugNotifications;
+		stopDiagnostics?.();
+		stopDiagnostics = startServiceWorkerDiagnostics(debugEnabled, sample => invoke('log_service_worker_inventory', {sample}));
+	};
 	void bootstrap.then(state => {
-		startServiceWorkerDiagnostics(state.debugNotifications, sample => invoke('log_service_worker_inventory', {sample}));
+		applyDiagnostics(state.settings);
 	}).catch(error => console.error('[Caprine] Could not initialize notification diagnostics', error));
 	void Promise.all([styled, bootstrap])
-		.then(([, state]) => {
+		.then(async ([, state]) => {
 			installStyles(state.customCss);
+			const settings = createSettingsClient(state.settings);
+			const applySettings = (value: Settings) => { applyTheme(value.theme); applyDiagnostics(value); };
+			settings.subscribe(applySettings);
+			applySettings(settings.get());
+			const panel = initializeSettingsPanel(settings, state.version);
+			observeUnread(document, count => invoke('report_unread', {count}));
+			document.addEventListener('keydown', event => {
+				if (!event.ctrlKey || event.altKey || event.metaKey) return;
+				if (event.code === 'Comma' || event.key === ',') {
+					event.preventDefault(); event.stopImmediatePropagation(); panel.toggle();
+				}
+				const direction = event.code === 'Equal' || event.code === 'NumpadAdd' ? 'in'
+					: event.code === 'Minus' || event.code === 'NumpadSubtract' ? 'out'
+						: event.code === 'Digit0' || event.code === 'Numpad0' ? 'reset' : null;
+				if (direction) {
+					event.preventDefault(); event.stopImmediatePropagation();
+					void settings.update(current => zoomUpdate(current, direction)).catch(error => console.error('[Caprine] Could not change zoom', error));
+				}
+			}, {capture: true});
+			await settings.connect();
 			if (state.customCssError) console.error('[Caprine]', state.customCssError);
 			document.documentElement.dataset.caprineVersion = state.version;
 			console.info('[Caprine] Messenger initialization complete');
