@@ -2,7 +2,7 @@
 
 A minimal desktop wrapper for **[Messenger](https://www.messenger.com)** on **Windows** and **Linux**, built with Tauri 2. It always loads `https://www.messenger.com`, so it works with Messenger-only accounts. Reliable desktop notifications are the main goal.
 
-This is a fork of [Caprine](https://github.com/sindresorhus/caprine), rewritten from Electron to Tauri on the `tauri` branch. It is **pre-release software** (`3.0.0-alpha.2`). No release has been published yet; build from source. It is not affiliated with Meta.
+This is a fork of [Caprine](https://github.com/sindresorhus/caprine), rewritten from Electron to Tauri. It is **pre-release software**: download it from [Releases](https://github.com/visnia/caprine/releases). The Electron version is kept on the [`electron-legacy`](https://github.com/visnia/caprine/tree/electron-legacy) branch. It is not affiliated with Meta.
 
 There is no macOS build and no native application menu bar. Settings live in an in-page drawer.
 
