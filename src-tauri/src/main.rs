@@ -297,7 +297,8 @@ fn main() {
             // Show the native window before minimizing; the child webview keeps
             // its controller visibility. Saved visibility never traps startup.
             window.show()?;
-            if settings.launch_minimized { tray::park(app.handle())?; }
+            // The panel disables Launch minimized while Launch at login is off.
+            if settings.launch_at_login && settings.launch_minimized { tray::park(app.handle())?; }
             Ok(())
         })
         .run(context)
