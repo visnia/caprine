@@ -1,6 +1,6 @@
 {
 	"name": "caprine",
-	"version": "3.0.2",
+	"version": "3.0.3",
 	"private": true,
 	"description": "Minimal Messenger wrapper for Windows and Linux",
 	"license": "MIT",
