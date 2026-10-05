@@ -12,7 +12,7 @@ export function applyTheme(value: Settings['theme']): void {
 	theme = value;
 	const dark = theme === 'dark' || theme === 'oled' || (theme === 'system' && (scheme?.matches ?? matchMedia('(prefers-color-scheme: dark)').matches));
 	// Messenger themes itself from the native preferred color scheme (Rust
-	// set_theme), as Electron Caprine did. This class only switches the retained
+	// set_theme). This class only switches the retained
 	// scrollbar/code-block styles; never restyle Messenger's pages or force
 	// color-scheme, which washed out the logged-out page. OLED only swaps
 	// Messenger's dark-mode color tokens.

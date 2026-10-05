@@ -43,7 +43,7 @@ pub fn install(
     // The permission handler only sees new requests. A denial stored by an
     // earlier build makes Messenger read `denied` and never ask again, so set
     // the profile state before Messenger loads (this also makes it `granted`
-    // from the first page load, as in Electron).
+    // from the first page load).
     let state_app = app.clone();
     let granted = SetPermissionStateCompletedHandler::create(Box::new(move |result| {
         if let Err(error) = result {

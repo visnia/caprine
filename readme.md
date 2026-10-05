@@ -97,14 +97,14 @@ Build success does not prove runtime behavior; the checks below are kept separat
 | Windows CI and Linux CI (type checks, tests, fmt, clippy, native build) | Passing on every phase pushed so far; see Actions. |
 | Fresh sign-in and persistence, settings drawer, theme/zoom persistence, Ctrl+0, close to tray, tray toggle, single instance (Windows) | **Verified by the user** on 2026-10-04. |
 | Signed NSIS updater artifact (Windows) | Verified locally: signature checks against the committed key, a tampered file is rejected, and the signed version matches. |
-| Unread badge/overlay, notification delivery, duplicates, click destinations, Action Center, mute/preview/flash, 30+ minute idle delivery | **Pending**: [combined checklist](docs/notification-verification.md). |
+| Unread badge/overlay, notification delivery, duplicates, click destinations, Action Center, mute/preview/flash, 30+ minute idle delivery | **Pending**. |
 | Calls, downloads, offline recovery, autoplay, spell checking, hardware acceleration, update installation | **Pending** runtime checks (same document). |
 | Autostart and window-geometry persistence | Implemented; not yet checked by the user. |
 | Any Linux desktop runtime behavior, Linux release bundles | **Not tested**: no Linux desktop was available; CI only compiles and unit-tests Linux. |
 
 ## Not included
 
-macOS; native menus; private mode; typing/seen/delivery-receipt blocking; emoji style customization; spell-check language selection; Work Chat; inline reply; conversation navigation commands and jump lists. **Ringtone muting** is not implemented: Electron Caprine blocked the ringtone by a response header that page scripts cannot see, and no reliable, ringtone-specific target has been measured. See [the migration audit](docs/tauri-migration-audit.md) for the full Electron API inventory, sources and decisions.
+macOS; native menus; private mode; typing/seen/delivery-receipt blocking; emoji style customization; spell-check language selection; Work Chat; inline reply; conversation navigation commands and jump lists. **Ringtone muting** is not implemented: Electron Caprine blocked the ringtone by a response header that page scripts cannot see, and no reliable, ringtone-specific target has been measured.
 
 ## License
 
