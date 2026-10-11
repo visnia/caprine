@@ -233,9 +233,13 @@ app.whenReady().then(() => {
 		contents.setZoomFactor(settings.zoomFactor);
 	});
 
+	// A window that was never shown keeps the saved state, which it has not
+	// applied yet (a maximized one is maximized only once shown).
+	let shown = false;
+	window.once('show', () => { shown = true; });
 	window.on('close', event => {
 		try {
-			fs.writeFileSync(userFile('window.json'), JSON.stringify({...window.getNormalBounds(), maximized: window.isMaximized()}));
+			if (shown) fs.writeFileSync(userFile('window.json'), JSON.stringify({...window.getNormalBounds(), maximized: window.isMaximized()}));
 		} catch (error) {
 			console.error('Could not save the window state', error);
 		}
@@ -249,11 +253,17 @@ app.whenReady().then(() => {
 	// Closing the main window quits, even while a call window is open.
 	window.on('closed', () => app.quit());
 
-	if (state.maximized) window.maximize();
 	// Only the login entry passes --autostart; a manual launch shows the window.
 	// Minimized means hidden in the tray, or on the taskbar when closing quits.
 	const minimized = process.argv.includes('--autostart') && settings.launchAtLogin && settings.launchMinimized;
-	if (!minimized || settings.quitOnWindowClose) window.show();
+	const hidden = minimized && !settings.quitOnWindowClose;
+	// maximize() also shows a hidden window, so one kept in the tray is
+	// maximized when it is first shown.
+	if (state.maximized) {
+		if (hidden) window.once('show', () => window.maximize());
+		else window.maximize();
+	}
+	if (!hidden) window.show();
 	if (minimized && settings.quitOnWindowClose) window.minimize();
 	void contents.loadURL(MESSENGER);
 });
