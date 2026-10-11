@@ -190,11 +190,12 @@ export function installCollector(report: (event: CollectorEvent) => Promise<unkn
 			// preview reports itself; only an unchanged one needs the tone.
 			setTimeout(() => {
 				if (lastSubmit >= heard) return;
-				const unread = sidebarUnreadThreads(document);
 				// Rows are ordered by recency: the newest message's chat comes first.
-				// No unread row means the tone was for something else (e.g. sending).
-				const row = [...sidebarThreads(document).values()].find(candidate => unread.has(candidate.threadId));
-				if (!row) return;
+				// Only that row can be the tone's chat. A read top row means the tone
+				// was for something else (sending, the open chat, a reaction), and an
+				// older unread chat further down would be a stale, unrelated message.
+				const row = sidebarThreads(document).values().next().value;
+				if (!row || !sidebarUnreadThreads(document).has(row.threadId)) return;
 				submit('sidebar', row.title, {body: row.body}, row);
 				lastSubmit = Date.now();
 			}, 1000);

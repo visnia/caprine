@@ -112,7 +112,7 @@ test('sidebar reads the hidden unread marker and sends only the preview as the b
 
 test('the message tone reports a repeated preview the sidebar cannot see, once, and ignores calls, video and sending', async () => {
 	const row = (id, unread, preview) => `<div role="row"><a href="/e2ee/t/${id}/"><span dir="auto"><span>Teresa ${id}</span></span>${unread ? '<div>Nieprzeczytana wiadomość:</div>' : ''}<span dir="auto"><span>${preview}</span></span></a></div>`;
-	const {document, collector, reports, HTMLMediaElement, HTMLVideoElement, timers} = setup(`<nav role="navigation"><div role="grid">${row('1', false, 'mine')}${row('2', true, 'a')}</div></nav>`);
+	const {document, collector, reports, HTMLMediaElement, HTMLVideoElement, timers} = setup(`<nav role="navigation"><div role="grid">${row('2', true, 'a')}${row('1', false, 'mine')}</div></nav>`);
 	const stop = collector.startSidebar(0);
 	await nextTurn();
 	const tone = new HTMLMediaElement();
@@ -120,13 +120,18 @@ test('the message tone reports a repeated preview the sidebar cannot see, once, 
 	await tone.play(); await ring.play(); await new HTMLVideoElement().play();
 	assert.equal(timers.length, 1);
 	timers.shift()();
-	// The second identical "a": topmost unread row, not the read chat above it.
+	// The second identical "a" in the newest chat.
 	assert.equal(reports.length, 1); assert.equal(reports[0].threadId, '2'); assert.equal(reports[0].body, 'a');
 	// A changed preview already reported this tone's message.
 	await tone.play();
-	document.querySelectorAll('[role="row"]')[1].outerHTML = row('2', true, 'b');
+	document.querySelectorAll('[role="row"]')[0].outerHTML = row('2', true, 'b');
 	await nextTurn(); assert.equal(reports.length, 2);
 	timers.shift()(); assert.equal(reports.length, 2);
+	// A read chat on top (the open chat, or sending): the older unread chat
+	// below is a stale message, not this tone's.
+	document.querySelector('[role="grid"]').insertAdjacentHTML('afterbegin', row('3', false, 'open chat'));
+	await nextTurn(); await tone.play(); timers.shift()();
+	assert.equal(reports.length, 2);
 	// No unread chat: the tone was not an incoming message.
 	document.querySelectorAll('[role="row"]')[1].outerHTML = row('2', false, 'b');
 	await nextTurn(); await tone.play(); timers.shift()();
