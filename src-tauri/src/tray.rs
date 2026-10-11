@@ -24,9 +24,16 @@ pub struct TrayState {
     parked: AtomicBool,
     /// The off phase of the unread blink: grey tray icon, no taskbar badge.
     dim: AtomicBool,
-    /// The size the window had when park() hid it; see keep_parked_size.
+    /// The size the window had when park() hid it; see keep_window_size.
     #[cfg(target_os = "linux")]
     parked_size: std::sync::Mutex<Option<tauri::PhysicalSize<u32>>>,
+    /// Whether GTK has configured the window since it was first mapped; see
+    /// keep_window_size.
+    #[cfg(target_os = "linux")]
+    configured: AtomicBool,
+    /// The window state file as it was at launch; see keep_unshown_state.
+    #[cfg(target_os = "linux")]
+    launch_state: std::sync::Mutex<Option<Vec<u8>>>,
 }
 
 const BLINK: Duration = Duration::from_millis(800);
@@ -117,8 +124,16 @@ pub fn park(app: &tauri::AppHandle) -> Result<(), String> {
     if app.tray_by_id("main-tray").is_none() {
         return Err("Tray is unavailable".into());
     }
-    app.save_window_state(WINDOW_STATE)
-        .map_err(|e| e.to_string())?;
+    // Launch minimized parks a window GTK has not mapped yet, which still
+    // reports the builder's size instead of the restored one.
+    #[cfg(target_os = "linux")]
+    let configured = app.state::<TrayState>().configured.load(Ordering::Relaxed);
+    #[cfg(not(target_os = "linux"))]
+    let configured = true;
+    if configured {
+        app.save_window_state(WINDOW_STATE)
+            .map_err(|e| e.to_string())?;
+    }
     let window = app
         .get_webview_window("main")
         .ok_or("Main window is unavailable")?;
@@ -140,7 +155,7 @@ pub fn park(app: &tauri::AppHandle) -> Result<(), String> {
     }
     #[cfg(target_os = "linux")]
     {
-        let size = if window.is_maximized().map_err(|e| e.to_string())? {
+        let size = if !configured || window.is_maximized().map_err(|e| e.to_string())? {
             None
         } else {
             Some(window.inner_size().map_err(|e| e.to_string())?)
@@ -158,16 +173,21 @@ pub fn park(app: &tauri::AppHandle) -> Result<(), String> {
 /// GTK maps a hidden window again at the size the app last requested, not at
 /// one the user resized it to, and its first configure after the map
 /// overrides earlier requests, so the size park() recorded follows that.
+/// tao learns the window's size only from configures, so until the first one
+/// it reports the builder's size and the window state is left alone.
 #[cfg(target_os = "linux")]
-pub fn keep_parked_size(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+pub fn keep_window_size(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     use gtk::prelude::*;
+    let path = window.path().app_config_dir()?.join(window.app_handle().filename());
+    *window.state::<TrayState>().launch_state.lock().unwrap() = std::fs::read(path).ok();
     let mapped = window.clone();
     window
         .gtk_window()?
         .connect_configure_event(move |gtk_window, _| {
             if gtk_window.is_mapped() {
-                let parked = mapped
-                    .state::<TrayState>()
+                let state = mapped.state::<TrayState>();
+                state.configured.store(true, Ordering::Relaxed);
+                let parked = state
                     .parked_size
                     .lock()
                     .unwrap()
@@ -184,6 +204,28 @@ pub fn keep_parked_size(window: &tauri::WebviewWindow) -> tauri::Result<()> {
             false
         });
     Ok(())
+}
+
+/// The window-state plugin saves on exit from the size tao reports, which for a
+/// window parked at launch and never shown is the builder's, so the state file
+/// from launch is put back. Plugins see the exit event before the app does.
+#[cfg(target_os = "linux")]
+pub fn keep_unshown_state(app: &tauri::AppHandle) {
+    let state = app.state::<TrayState>();
+    if state.configured.load(Ordering::Relaxed) {
+        return;
+    }
+    let Some(contents) = state.launch_state.lock().unwrap().take() else {
+        return;
+    };
+    let written = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())
+        .and_then(|dir| std::fs::write(dir.join(app.filename()), contents).map_err(|e| e.to_string()));
+    if let Err(error) = written {
+        eprintln!("Could not keep the window state: {error}");
+    }
 }
 
 pub fn restore(app: &tauri::AppHandle) -> Result<(), String> {

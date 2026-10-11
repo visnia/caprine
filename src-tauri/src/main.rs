@@ -294,7 +294,7 @@ fn main() {
             settings::apply_title_bar(&window, settings.theme);
             tray::install(app.handle())?;
             #[cfg(target_os = "linux")]
-            tray::keep_parked_size(&window)?;
+            tray::keep_window_size(&window)?;
             tray::refresh(app.handle())?;
             tray::start_blinking(app.handle());
             engine::install(&window, &settings)?;
@@ -327,6 +327,10 @@ fn main() {
             if settings.launch_at_login && settings.launch_minimized { tray::park(app.handle())?; }
             Ok(())
         })
-        .run(context)
-        .expect("could not run Caprine");
+        .build(context)
+        .expect("could not run Caprine")
+        .run(|_app, _event| {
+            #[cfg(target_os = "linux")]
+            if let tauri::RunEvent::Exit = _event { tray::keep_unshown_state(_app); }
+        });
 }
