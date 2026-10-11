@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import test from 'node:test';
 import {setImmediate as nextTurn} from 'node:timers/promises';
+import {pathToFileURL} from 'node:url';
 import {load} from './load.mjs';
 
 class Variant {
@@ -52,7 +53,8 @@ test('a sound is named for the server, and a silent notification suppresses one'
 	await notify({title: 'Ann', body: 'a < b & c', sound: 'message-new-instant'}, () => {});
 	await notify({title: 'Download complete', body: 'file.zip', sound: null}, () => {});
 	const [message, download] = sent;
-	assert.deepEqual(plain(message.slice(0, 6)), ['caprine', 0, 'file:///app/icons/icon.png', 'Ann', 'a &lt; b &amp; c', ['default', 'Open']]);
+	// Windows resolves the path onto the current drive.
+	assert.deepEqual(plain(message.slice(0, 6)), ['caprine', 0, pathToFileURL('/app/icons/icon.png').href, 'Ann', 'a &lt; b &amp; c', ['default', 'Open']]);
 	assert.equal(message[7], -1);
 	assert.deepEqual(plain(hints(message)), {'desktop-entry': 'caprine', urgency: 1, 'sender-pid': '42n', 'sound-name': 'message-new-instant'});
 	assert.deepEqual(plain(hints(download)), {'desktop-entry': 'caprine', urgency: 1, 'sender-pid': '42n', 'suppress-sound': true});
