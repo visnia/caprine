@@ -17,7 +17,7 @@ const button = (text: string, className = 'caprine-settings-action') => {
 	return node;
 };
 
-export function initializeSettingsPanel(client: SettingsClient, version: string, platform: 'windows' | 'linux') {
+export function initializeSettingsPanel(client: SettingsClient, version: string, platform: 'windows' | 'linux', missingDictionaries: string[] = []) {
 	const launcher = button('', 'caprine-settings-launcher');
 	launcher.id = 'caprine-settings-launcher';
 	launcher.title = 'Caprine Settings (Ctrl+,)';
@@ -127,9 +127,19 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 	toggle(behavior, 'Tray icon', 'Show Caprine in the system tray. Can be hidden only while Quit on window close is on.', 'showTrayIcon');
 	const media = section('Messages & media');
 	toggle(media, 'Autoplay videos', 'Let videos and animated clips start on their own. Calls are not affected.', 'autoplayVideos');
-	toggle(media, 'Spell checking', platform === 'windows'
+	const spellDescription = platform === 'windows'
 		? 'Underline misspellings in the message composer.'
-		: 'Underline misspellings using the system locale dictionaries.', 'spellCheck');
+		: 'Underline misspellings using the system locale dictionaries.';
+	toggle(media, 'Spell checking', spellDescription, 'spellCheck');
+	const spellCopy = controls.get('spellCheck')!.closest('.caprine-settings-row')!.querySelector('.caprine-settings-description')!;
+	// WebKitGTK reads the system's hunspell dictionaries and none are bundled.
+	const showDictionaries = (missing: string[]) => {
+		spellCopy.textContent = missing.length === 0 ? spellDescription
+			: `No dictionary is installed for ${missing.join(', ')}. Install a hunspell dictionary for your language, such as hunspell-${missing[0]!.split(/[_-]/)[0]!.toLowerCase()}, then relaunch Caprine.`;
+		spellCopy.classList.toggle('is-warning', missing.length > 0);
+	};
+	showDictionaries(missingDictionaries);
+	if (platform === 'linux') void listen<string[]>('missing-dictionaries', event => showDictionaries(event.payload)).catch(() => {});
 	const notifications = section('Notifications');
 	// Stored as muteNotifications, so existing settings files keep their meaning.
 	toggle(notifications, 'Desktop notifications', 'Show a notification and flash the taskbar for new messages while Caprine is not focused.', 'muteNotifications', true);

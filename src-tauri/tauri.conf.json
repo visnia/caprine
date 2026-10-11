@@ -24,6 +24,9 @@
 			"minimumWebview2Version": "128.0.2739.15",
 			"webviewInstallMode": {"type": "downloadBootstrapper", "silent": true},
 			"nsis": {"startMenuFolder": "Visnia", "installerHooks": "installer/hooks.nsh"}
+		},
+		"linux": {
+			"appimage": {"bundleMediaFramework": true}
 		}
 	},
 	"plugins": {

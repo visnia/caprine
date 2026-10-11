@@ -9,7 +9,7 @@ import {installCollector, openThread} from './collector';
 import {createSpellcheckController, installAutoplayGuard} from './media';
 import {observePageKind} from './page';
 
-type Bootstrap = {version: string; platform: 'windows' | 'linux'; customCss: string; customCssError: string | null; settings: Settings};
+type Bootstrap = {version: string; platform: 'windows' | 'linux'; customCss: string; customCssError: string | null; settings: Settings; missingDictionaries: string[]};
 
 // Navigation can take this script to another origin. The Rust capability
 // independently enforces IPC; only Messenger's top frame gets our integration.
@@ -44,7 +44,7 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 			};
 			settings.subscribe(applySettings);
 			applySettings(settings.get());
-			const panel = initializeSettingsPanel(settings, state.version, state.platform);
+			const panel = initializeSettingsPanel(settings, state.version, state.platform, state.missingDictionaries);
 			observeUnread(document, count => invoke('report_unread', {count}));
 			collector.startSidebar();
 			void listen<string>('open-thread', event => openThread(document, event.payload))

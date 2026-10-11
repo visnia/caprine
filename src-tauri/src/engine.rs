@@ -2,6 +2,29 @@
 //! offline recovery, spell checking, GPU policy and (Linux) downloads.
 //! Installed before Messenger is first navigated.
 
+/// Spell-check languages that have no installed dictionary, recorded only
+/// when spell checking is on and none could be loaded, so it does nothing.
+#[derive(Default)]
+pub struct MissingDictionaries(std::sync::Mutex<Vec<String>>);
+
+impl MissingDictionaries {
+    pub fn get(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    fn set(&self, app: &tauri::AppHandle, missing: Vec<String>) {
+        use tauri::Emitter;
+        let mut current = self.0.lock().unwrap();
+        if *current == missing {
+            return;
+        }
+        *current = missing.clone();
+        drop(current);
+        let _ = app.emit("missing-dictionaries", missing);
+    }
+}
+
 /// Spell-check languages from the POSIX locale variables, in priority order.
 /// WebKitGTK needs an explicit list; there is no language-selection UI.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -159,13 +182,19 @@ mod platform {
             || error.kind::<webkit2gtk::PluginError>().is_some())
     }
 
-    fn apply_spell_check(context: &WebContext, enabled: bool) {
+    fn apply_spell_check(app: &tauri::AppHandle, context: &WebContext, enabled: bool) {
+        let mut missing = Vec::new();
         if enabled {
             let languages = super::locale_languages(|name| std::env::var(name).ok());
-            let languages: Vec<&str> = languages.iter().map(String::as_str).collect();
-            context.set_spell_checking_languages(&languages);
+            let requested: Vec<&str> = languages.iter().map(String::as_str).collect();
+            context.set_spell_checking_languages(&requested);
+            // WebKit keeps only the languages enchant found a dictionary for.
+            if context.spell_checking_languages().is_empty() {
+                missing = languages;
+            }
         }
         context.set_spell_checking_enabled(enabled);
+        app.state::<super::MissingDictionaries>().set(app, missing);
     }
 
     pub fn install(
@@ -184,7 +213,7 @@ mod platform {
                 }
             }
             if let Some(context) = view.context() {
-                apply_spell_check(&context, spell);
+                apply_spell_check(&app, &context, spell);
                 downloads(&app, &context);
             }
             let committed = app.clone();
@@ -237,10 +266,11 @@ mod platform {
     }
 
     pub fn set_spell_check(window: &tauri::WebviewWindow, enabled: bool) -> Result<(), String> {
+        let app = window.app_handle().clone();
         window
             .with_webview(move |webview| {
                 if let Some(context) = webview.inner().context() {
-                    apply_spell_check(&context, enabled);
+                    apply_spell_check(&app, &context, enabled);
                 }
             })
             .map_err(|e| e.to_string())

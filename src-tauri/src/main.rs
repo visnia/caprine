@@ -28,6 +28,7 @@ struct Bootstrap {
     custom_css: String,
     custom_css_error: Option<String>,
     settings: settings::Settings,
+    missing_dictionaries: Vec<String>,
 }
 
 fn require_messenger(webview: &Webview) -> Result<(), String> {
@@ -61,6 +62,7 @@ fn bootstrap(app: tauri::AppHandle, webview: Webview) -> Result<Bootstrap, Strin
         custom_css,
         custom_css_error,
         settings: app.state::<settings::SettingsState>().get(),
+        missing_dictionaries: app.state::<engine::MissingDictionaries>().get(),
     })
 }
 
@@ -226,6 +228,7 @@ fn main() {
             app.manage(notifications::Broker::start(app.handle().clone()));
             app.manage(offline::Offline::default());
             app.manage(update::UpdateState::default());
+            app.manage(engine::MissingDictionaries::default());
             #[cfg(target_os = "linux")]
             if let Err(error) = linux::install_desktop_entry(app.handle()) { eprintln!("Could not install the desktop entry: {error}"); }
             let navigation_app = app.handle().clone();
