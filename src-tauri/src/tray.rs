@@ -178,7 +178,10 @@ pub fn park(app: &tauri::AppHandle) -> Result<(), String> {
 #[cfg(target_os = "linux")]
 pub fn keep_window_size(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     use gtk::prelude::*;
-    let path = window.path().app_config_dir()?.join(window.app_handle().filename());
+    let path = window
+        .path()
+        .app_config_dir()?
+        .join(window.app_handle().filename());
     *window.state::<TrayState>().launch_state.lock().unwrap() = std::fs::read(path).ok();
     let mapped = window.clone();
     window
@@ -187,11 +190,7 @@ pub fn keep_window_size(window: &tauri::WebviewWindow) -> tauri::Result<()> {
             if gtk_window.is_mapped() {
                 let state = mapped.state::<TrayState>();
                 state.configured.store(true, Ordering::Relaxed);
-                let parked = state
-                    .parked_size
-                    .lock()
-                    .unwrap()
-                    .take();
+                let parked = state.parked_size.lock().unwrap().take();
                 if let Some(size) = parked {
                     let window = mapped.clone();
                     gtk::glib::idle_add_local_once(move || {
@@ -222,7 +221,9 @@ pub fn keep_unshown_state(app: &tauri::AppHandle) {
         .path()
         .app_config_dir()
         .map_err(|e| e.to_string())
-        .and_then(|dir| std::fs::write(dir.join(app.filename()), contents).map_err(|e| e.to_string()));
+        .and_then(|dir| {
+            std::fs::write(dir.join(app.filename()), contents).map_err(|e| e.to_string())
+        });
     if let Err(error) = written {
         eprintln!("Could not keep the window state: {error}");
     }
