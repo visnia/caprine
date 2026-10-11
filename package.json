@@ -1,7 +1,7 @@
 {
 	"name": "caprine",
 	"productName": "caprine",
-	"version": "3.0.1",
+	"version": "3.0.2",
 	"private": true,
 	"description": "Minimal Messenger wrapper for Windows and Linux",
 	"author": "visnia",
