@@ -11,7 +11,7 @@ export const defaults = {
 	quitOnWindowClose: false,
 	trayIconStyle: 'color' as 'color' | 'white' | 'black',
 	showUnreadBadge: true,
-	muteNotifications: false,
+	notifications: true,
 	notificationPreview: true,
 	// Messenger: its in-page tone, silent notifications. System: the platform
 	// notification sound, Messenger's tone muted. Off: neither.

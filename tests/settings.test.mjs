@@ -15,12 +15,6 @@ test('stored settings keep valid values and drop unknown or invalid ones', () =>
 	assert.equal('debugNotifications' in settings, false);
 });
 
-test('the old on/off sound switch is read as Messenger or Off', () => {
-	assert.equal(sanitize({notificationSound: true}).notificationSound, 'messenger');
-	assert.equal(sanitize({notificationSound: false}).notificationSound, 'off');
-	assert.equal(sanitize({notificationSound: 'system'}).notificationSound, 'system');
-});
-
 test('updates reject unknown settings, wrong types and invalid zoom', () => {
 	for (const [key, value] of [['privateMode', true], ['__proto__', {}], ['theme', 'vibrant'], ['launchMinimized', 'false'], ['zoomFactor', 2.1], ['zoomFactor', Number.NaN]]) {
 		assert.throws(() => changed(defaults, key, value), /Invalid value/, key);

@@ -1,6 +1,5 @@
 import {app} from 'electron';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {choices, defaults, type Settings} from '../shared';
 
@@ -16,8 +15,6 @@ function valid(key: keyof Settings, value: unknown): boolean {
 // file still loads.
 export function sanitize(input: Record<string, unknown>): Settings {
 	const settings = {...defaults} as Record<keyof Settings, unknown>;
-	// Builds that offered an on/off sound switch saved it as a boolean.
-	if (typeof input.notificationSound === 'boolean') input = {...input, notificationSound: input.notificationSound ? 'messenger' : 'off'};
 	for (const key of Object.keys(defaults) as Array<keyof Settings>) {
 		if (valid(key, input[key])) settings[key] = input[key];
 	}
@@ -31,7 +28,13 @@ export function loadSettings(): Settings {
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Could not read settings.json; using defaults', error);
 	}
-	return {...sanitize(stored), launchAtLogin: launchAtLogin()};
+	const enabled = launchAtLogin();
+	// Rewritten at startup so it points at this build, even after the AppImage
+	// has moved or been renamed.
+	if (enabled && process.platform === 'linux') {
+		try { setLaunchAtLogin(true); } catch (error) { console.error('Could not refresh the autostart entry', error); }
+	}
+	return {...sanitize(stored), launchAtLogin: enabled};
 }
 
 export function saveSettings(settings: Settings) {
@@ -43,18 +46,6 @@ export function saveSettings(settings: Settings) {
 export function changed<K extends keyof Settings>(settings: Settings, key: K, value: unknown): Settings {
 	if (!Object.hasOwn(defaults, key) || !valid(key, value)) throw new Error(`Invalid value for ${key}`);
 	return {...settings, [key]: value};
-}
-
-// The Tauri builds kept settings.json and custom.css in the platform data
-// directory. On Windows that is this userData directory already.
-export function migrateTauriFiles() {
-	if (process.platform !== 'linux' || fs.existsSync(file())) return;
-	const old = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local/share'), path.basename(app.getPath('userData')));
-	for (const name of ['settings.json', 'custom.css']) {
-		try {
-			fs.copyFileSync(path.join(old, name), path.join(app.getPath('userData'), name), fs.constants.COPYFILE_EXCL);
-		} catch {}
-	}
 }
 
 // Electron has no login items on Linux, so it gets an XDG autostart entry.

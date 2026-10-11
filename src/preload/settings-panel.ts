@@ -85,10 +85,7 @@ export function initializeSettingsPanel(host: PanelHost) {
 		return control;
 	};
 	type BooleanKey = {[K in keyof Settings]: Settings[K] extends boolean ? K : never}[keyof Settings];
-	// An inverted toggle reads "on" when the stored setting is false.
-	const inverted = new Set<keyof Settings>();
-	const toggle = (parent: HTMLElement, label: string, description: string, setting: BooleanKey, invert = false) => {
-		if (invert) inverted.add(setting);
+	const toggle = (parent: HTMLElement, label: string, description: string, setting: BooleanKey) => {
 		const track = element('label', 'caprine-settings-toggle');
 		const input = element('input');
 		input.type = 'checkbox';
@@ -96,7 +93,7 @@ export function initializeSettingsPanel(host: PanelHost) {
 		track.append(input, element('span'));
 		row(parent, label, description).append(track);
 		controls.set(setting, input);
-		input.addEventListener('change', () => { void run(input, () => host.update(setting, input.checked !== invert)); });
+		input.addEventListener('change', () => { void run(input, () => host.update(setting, input.checked)); });
 	};
 	const select = (parent: HTMLElement, label: string, description: string, setting: 'theme' | 'trayIconStyle' | 'notificationSound', choices: Array<[string, string]>) => {
 		const input = element('select', 'caprine-settings-select');
@@ -143,8 +140,7 @@ export function initializeSettingsPanel(host: PanelHost) {
 	toggle(media, 'Spell checking', host.platform === 'win32' ? 'Underline misspellings using the Windows spell checker.' : 'Underline misspellings using dictionaries for your system languages.', 'spellCheck');
 
 	const notifications = section('Notifications');
-	// Stored as muteNotifications, so existing settings files keep their meaning.
-	toggle(notifications, 'Desktop notifications', 'Show a notification for new messages while Caprine is not focused.', 'muteNotifications', true);
+	toggle(notifications, 'Desktop notifications', 'Show a notification for new messages while Caprine is not focused.', 'notifications');
 	toggle(notifications, 'Message preview', 'Include message text in desktop notifications.', 'notificationPreview');
 	select(notifications, 'Notification sound', 'Play Messenger\'s message tone or the system notification sound. System plays only when a notification is shown.', 'notificationSound', [['messenger', 'Messenger'], ['system', 'System'], ['off', 'Off']]);
 	toggle(notifications, 'Flash taskbar', 'Flash the taskbar when a message notification arrives.', 'flashTaskbar');
@@ -192,7 +188,7 @@ export function initializeSettingsPanel(host: PanelHost) {
 		launcher.dataset.caprineTheme = settings.theme;
 		backdrop.dataset.caprineTheme = settings.theme;
 		for (const [key, control] of controls) {
-			if (control instanceof HTMLInputElement) control.checked = Boolean(settings[key]) !== inverted.has(key);
+			if (control instanceof HTMLInputElement) control.checked = Boolean(settings[key]);
 			else control.value = String(settings[key]);
 		}
 		controls.get('launchMinimized')!.disabled = !settings.launchAtLogin;

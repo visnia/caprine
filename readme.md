@@ -37,8 +37,6 @@ This is a fork of [Caprine](https://github.com/sindresorhus/caprine), rewritten 
 - `window.json`: window size and position.
 - Everything else is the Chromium profile, including your Messenger session.
 
-On first launch, `settings.json` and `custom.css` from the Tauri builds are reused (on Linux they are copied from `~/.local/share/com.visnia.caprine`). The Messenger session cannot be carried over, so you sign in once more.
-
 ## Code layout
 
 | Path | What |

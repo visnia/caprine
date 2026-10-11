@@ -2,7 +2,7 @@ import {app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Notificatio
 import fs from 'node:fs';
 import path from 'node:path';
 import {MESSENGER, zoomStep, type MessageNotice, type Settings} from '../shared';
-import {changed, loadSettings, migrateTauriFiles, saveSettings, setLaunchAtLogin} from './settings';
+import {changed, loadSettings, saveSettings, setLaunchAtLogin} from './settings';
 import {installTitleBar, titleBarHeight, titleBarOptions} from './title-bar';
 import {createTray} from './tray';
 import {createUpdater} from './updates';
@@ -16,7 +16,6 @@ if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? id : pr
 if (!app.requestSingleInstanceLock()) app.exit();
 
 fs.mkdirSync(app.getPath('userData'), {recursive: true});
-migrateTauriFiles();
 let settings = loadSettings();
 if (!settings.hardwareAcceleration) app.disableHardwareAcceleration();
 Menu.setApplicationMenu(null);
@@ -177,7 +176,7 @@ app.whenReady().then(() => {
 		tray.setUnread(count as number, typeof badge === 'string' && badge.startsWith('data:image/png;base64,') ? badge : null);
 	});
 	on('message', async (message: MessageNotice) => {
-		if (settings.muteNotifications || window.isFocused()) return;
+		if (!settings.notifications || window.isFocused()) return;
 		let icon: Electron.NativeImage | undefined;
 		const iconUrl = URL.parse(String(message.iconUrl));
 		if (iconUrl?.protocol === 'https:' && iconUrl.hostname.endsWith('.fbcdn.net')) {
