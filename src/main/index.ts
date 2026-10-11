@@ -163,7 +163,7 @@ app.whenReady().then(() => {
 			return shell.openPath(userFile('custom.css'));
 		}
 		if (action === 'relaunch') {
-			app.relaunch({args: process.argv.slice(1).filter(arg => arg !== '--autostart')});
+			relaunch(process.argv.slice(1).filter(arg => arg !== '--autostart'));
 			quit();
 		}
 		if (action === 'quit') quit();
@@ -267,6 +267,16 @@ app.whenReady().then(() => {
 	if (minimized && settings.quitOnWindowClose) window.minimize();
 	void contents.loadURL(MESSENGER);
 });
+
+// app.relaunch() restarts from the AppImage's mount, which is gone once
+// Caprine exits, and its helper's processes cannot gain privileges, so the
+// image cannot mount again either. A shell waits for Caprine to exit and
+// starts the image.
+function relaunch(args: string[]) {
+	if (!process.env.APPIMAGE) return app.relaunch({args});
+	spawn('/bin/sh', ['-c', 'while kill -0 "$0" 2>/dev/null; do sleep 0.1; done; exec "$APPIMAGE" "$@"', String(process.pid), ...args], {detached: true, stdio: 'ignore'})
+		.on('error', error => console.error('Could not relaunch Caprine', error)).unref();
+}
 
 function offlinePage(url: string, reason: string, delay: number): string {
 	const json = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
