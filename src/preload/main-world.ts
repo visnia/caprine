@@ -8,18 +8,23 @@ export type Bridge = {
 // contextBridge.executeInMainWorld. It is serialized, so it must not use
 // anything from outside its body.
 export function installMainWorld(bridge: Bridge) {
-	let lastGesture = Number.NEGATIVE_INFINITY;
-	for (const type of ['pointerdown', 'keydown', 'click']) {
-		addEventListener(type, event => { if (event.isTrusted) lastGesture = performance.now(); }, {capture: true});
+	let lastKey = Number.NEGATIVE_INFINITY;
+	let lastClick = Number.NEGATIVE_INFINITY;
+	addEventListener('keydown', event => { if (event.isTrusted) lastKey = performance.now(); }, {capture: true});
+	// Pressing Enter or Space on a button also clicks it.
+	for (const type of ['pointerdown', 'click']) {
+		addEventListener(type, event => { if (event.isTrusted) lastClick = performance.now(); }, {capture: true});
 	}
-	const gesture = () => navigator.userActivation?.isActive === true || performance.now() - lastGesture < 1000;
+	const recent = (time: number) => performance.now() - time < 1000;
+	const gesture = () => navigator.userActivation?.isActive === true || recent(lastKey) || recent(lastClick);
 	// Calls and camera previews play MediaStreams; those are never blocked.
 	const blocked = (media: HTMLMediaElement) => {
-		if (media.srcObject instanceof MediaStream || gesture()) return false;
-		if (media instanceof HTMLVideoElement) return !bridge.media().autoplay;
+		if (media.srcObject instanceof MediaStream) return false;
+		if (media instanceof HTMLVideoElement) return !gesture() && !bridge.media().autoplay;
 		// An unprompted, non-looping sound is Messenger's message tone. Calls
-		// ring in a loop and voice clips start from a gesture.
-		if (media.loop) return false;
+		// ring in a loop and voice clips start from a click. Typing does not
+		// count, as the tone for another chat plays while typing.
+		if (media.loop || recent(lastClick)) return false;
 		bridge.tone();
 		return !bridge.media().tone;
 	};

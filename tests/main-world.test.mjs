@@ -61,6 +61,22 @@ test('an unprompted, non-looping sound is the message tone and is refused unless
 	assert.equal(calls.tone, 2);
 });
 
+test('typing does not let the message tone through', async () => {
+	const {media, calls, listeners, advance, globals, HTMLMediaElement} = setup({autoplay: true, tone: false});
+	listeners.keydown({isTrusted: true});
+	globals.navigator.userActivation = {isActive: true};
+	await assert.rejects(new HTMLMediaElement().play(), {name: 'NotAllowedError'});
+	assert.equal(calls.tone, 1);
+	listeners.click({isTrusted: true});
+	await new HTMLMediaElement().play();
+	assert.equal(calls.tone, 1);
+	advance(2000);
+	await assert.rejects(new HTMLMediaElement().play(), {name: 'NotAllowedError'});
+	media.tone = true;
+	await new HTMLMediaElement().play();
+	assert.equal(calls.tone, 3);
+});
+
 test('Messenger notifications are reported instead of shown', async () => {
 	const {globals, calls} = setup();
 	const {Notification} = globals;
