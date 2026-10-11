@@ -242,7 +242,7 @@ fn main() {
                     if payload.event() == tauri::webview::PageLoadEvent::Finished { offline::page_loaded(&window, payload.url()); }
                 })
                 .on_navigation(move |url| {
-                    if url.as_str() == "about:blank" || policy::is_messenger(url) || policy::is_authentication(url) {
+                    if url.as_str() == "about:blank" || policy::is_messenger(url) || policy::is_authentication(url) || policy::is_messenger_frame(url) {
                         true
                     } else {
                         if let Err(error) = open_link(&navigation_app, url.as_str()) {

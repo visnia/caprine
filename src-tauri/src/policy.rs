@@ -23,6 +23,17 @@ pub fn is_authentication(url: &Url) -> bool {
         .any(|prefix| url.path() == *prefix || url.path().starts_with(&format!("{prefix}/")))
 }
 
+/// Messenger embeds hidden frames from its sandbox domain (the end-to-end
+/// encryption proxy at `/maw_proxy_page/`). WebKitGTK reports frame loads to
+/// the navigation handler like top-level ones, so without this they are
+/// blocked and opened in the browser. Link clicks never reach this check:
+/// the injected script sends them to `open_external` first.
+pub fn is_messenger_frame(url: &Url) -> bool {
+    url.scheme() == "https"
+        && url.port_or_known_default() == Some(443)
+        && url.host_str() == Some("www.fbsbx.com")
+}
+
 pub fn external_url(input: &str) -> Result<Url, String> {
     let mut url = Url::parse(input).map_err(|_| "Invalid URL")?;
     for _ in 0..5 {
@@ -88,6 +99,21 @@ mod tests {
                 .host_str(),
             Some("example.com")
         );
+    }
+
+    #[test]
+    fn only_the_messenger_sandbox_host_loads_as_a_frame() {
+        assert!(is_messenger_frame(
+            &Url::parse("https://www.fbsbx.com/maw_proxy_page/?__cci=abc").unwrap()
+        ));
+        for url in [
+            "http://www.fbsbx.com/maw_proxy_page/",
+            "https://www.fbsbx.com:8443/maw_proxy_page/",
+            "https://www.fbsbx.com.evil.test/maw_proxy_page/",
+            "https://evil.test/www.fbsbx.com",
+        ] {
+            assert!(!is_messenger_frame(&Url::parse(url).unwrap()), "{url}");
+        }
     }
 
     #[test]

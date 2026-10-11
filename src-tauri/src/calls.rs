@@ -76,7 +76,9 @@ pub fn new_window(
             loaded_messenger.store(true, Ordering::Relaxed);
             return true;
         }
-        if is_blank(url) {
+        if is_blank(url)
+            || (crate::policy::is_messenger_frame(url) && loaded_messenger.load(Ordering::Relaxed))
+        {
             return true;
         }
         if let Err(error) = crate::open_link(&navigation_app, url.as_str()) {
