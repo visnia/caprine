@@ -248,8 +248,12 @@ pub fn apply_title_bar(window: &tauri::WebviewWindow, theme: Theme) {
     }
 }
 
-#[cfg(not(windows))]
-pub fn apply_title_bar(_window: &tauri::WebviewWindow, _theme: Theme) {}
+/// Paints KWin's server-side decoration the same way through its per-window
+/// palette; Light gets a white palette since the system scheme may be dark.
+#[cfg(target_os = "linux")]
+pub fn apply_title_bar(window: &tauri::WebviewWindow, theme: Theme) {
+    crate::linux::set_theme(window, theme);
+}
 
 fn apply_native(app: &tauri::AppHandle, old: &Settings, new: &Settings) -> Result<(), String> {
     let window = app

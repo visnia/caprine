@@ -7,6 +7,8 @@ mod calls;
 mod diagnostics;
 mod downloads;
 mod engine;
+#[cfg(target_os = "linux")]
+mod linux;
 mod notifications;
 mod offline;
 mod policy;
@@ -199,6 +201,8 @@ fn main() {
             "could not set Windows AppUserModelID: {result:#x}"
         );
     }
+    #[cfg(target_os = "linux")]
+    linux::set_app_id(&context.config().identifier);
     let autostart_name = context.config().identifier.clone();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -222,6 +226,8 @@ fn main() {
             app.manage(notifications::Broker::start(app.handle().clone()));
             app.manage(offline::Offline::default());
             app.manage(update::UpdateState::default());
+            #[cfg(target_os = "linux")]
+            if let Err(error) = linux::install_desktop_entry(app.handle()) { eprintln!("Could not install the desktop entry: {error}"); }
             let navigation_app = app.handle().clone();
             let popup_app = app.handle().clone();
             // Install engine hooks before Messenger can construct notifications.
@@ -267,6 +273,8 @@ fn main() {
                 });
             let window = builder.build()?;
             window.set_zoom(settings.zoom_factor)?;
+            #[cfg(target_os = "linux")]
+            if let Err(error) = linux::install_frame(&window) { eprintln!("Could not style the title bar: {error}"); }
             settings::apply_title_bar(&window, settings.theme);
             tray::install(app.handle())?;
             tray::refresh(app.handle())?;
