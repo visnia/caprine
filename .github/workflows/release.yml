@@ -46,9 +46,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
+        # bundleMediaFramework copies the runner's GStreamer plugins: libav
+        # decodes H.264/AAC and plugins-bad parses H.264 for Messenger's videos.
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf file gstreamer1.0-plugins-base gstreamer1.0-plugins-good libhunspell-dev hunspell-en-us
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf file gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav libhunspell-dev hunspell-en-us
       - name: Build enchant for the AppImage
         if: runner.os == 'Linux'
         run: |
@@ -79,6 +81,13 @@ jobs:
           if not enchant.enchant_broker_dict_exists(enchant.enchant_broker_init(), b"en_US"):
               sys.exit("The bundled enchant does not find the system en_US dictionary.")
           EOF
+      - name: Check the AppImage bundles the H.264 and AAC decoders
+        if: runner.os == 'Linux'
+        working-directory: ${{ runner.temp }}
+        run: |
+          for plugin in libgstlibav.so libgstvideoparsersbad.so; do
+            test -f "squashfs-root/usr/lib/gstreamer-1.0/$plugin" || { echo "::error::The AppImage lacks $plugin."; exit 1; }
+          done
       - name: Collect and verify signatures
         run: node scripts/release-artifacts.mjs collect ${{ matrix.platform }}
       - uses: actions/upload-artifact@v7
