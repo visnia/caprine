@@ -16,6 +16,17 @@ pub enum Theme {
     Oled,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TrayIconStyle {
+    #[default]
+    Color,
+    /// Monochrome outline for dark panels.
+    White,
+    /// Monochrome outline for light panels.
+    Black,
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Settings {
@@ -26,6 +37,7 @@ pub struct Settings {
     pub launch_minimized: bool,
     pub quit_on_window_close: bool,
     pub show_tray_icon: bool,
+    pub tray_icon_style: TrayIconStyle,
     pub show_unread_badge: bool,
     pub debug_notifications: bool,
     pub mute_notifications: bool,
@@ -47,6 +59,7 @@ impl Default for Settings {
             launch_minimized: false,
             quit_on_window_close: false,
             show_tray_icon: true,
+            tray_icon_style: TrayIconStyle::Color,
             show_unread_badge: true,
             debug_notifications: false,
             mute_notifications: false,
@@ -75,6 +88,7 @@ pub enum Update {
     LaunchMinimized(bool),
     QuitOnWindowClose(bool),
     ShowTrayIcon(bool),
+    TrayIconStyle(TrayIconStyle),
     ShowUnreadBadge(bool),
     DebugNotifications(bool),
     MuteNotifications(bool),
@@ -120,6 +134,7 @@ impl Settings {
                 next.show_tray_icon |= !v;
             }
             Update::ShowTrayIcon(v) => next.show_tray_icon = v,
+            Update::TrayIconStyle(v) => next.tray_icon_style = v,
             Update::ShowUnreadBadge(v) => next.show_unread_badge = v,
             Update::DebugNotifications(v) => next.debug_notifications = v,
             Update::MuteNotifications(v) => next.mute_notifications = v,
@@ -294,6 +309,7 @@ mod tests {
             r#"{"setting":"privateMode","value":true}"#,
             r#"{"setting":"theme","value":"vibrant"}"#,
             r#"{"setting":"launchMinimized","value":"false"}"#,
+            r#"{"setting":"trayIconStyle","value":"red"}"#,
         ] {
             assert!(serde_json::from_str::<Update>(json).is_err());
         }
@@ -324,5 +340,13 @@ mod tests {
         let settings = Settings::default().updated(update).unwrap();
         assert_eq!(settings.theme, Theme::Oled);
         assert_eq!(settings.native_theme(), Some(tauri::Theme::Dark));
+    }
+    #[test]
+    fn tray_icon_style_defaults_to_color_and_updates() {
+        assert_eq!(Settings::default().tray_icon_style, TrayIconStyle::Color);
+        let update: Update =
+            serde_json::from_str(r#"{"setting":"trayIconStyle","value":"white"}"#).unwrap();
+        let settings = Settings::default().updated(update).unwrap();
+        assert_eq!(settings.tray_icon_style, TrayIconStyle::White);
     }
 }

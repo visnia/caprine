@@ -12,6 +12,8 @@ use tauri::{
 };
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
+use crate::settings::TrayIconStyle;
+
 pub const WINDOW_STATE: StateFlags = StateFlags::SIZE
     .union(StateFlags::POSITION)
     .union(StateFlags::MAXIMIZED);
@@ -53,8 +55,9 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &quit])?;
+    let settings = app.state::<crate::settings::SettingsState>().get();
     let builder = TrayIconBuilder::with_id("main-tray")
-        .icon(tray_icon(false)?)
+        .icon(tray_icon(false, settings.tray_icon_style)?)
         .tooltip("caprine")
         .menu(&menu)
         .on_menu_event(|app, event| {
@@ -96,7 +99,6 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
             }
         });
     let tray = builder.build(app)?;
-    let settings = app.state::<crate::settings::SettingsState>().get();
     tray.set_visible(settings.show_tray_icon)?;
     Ok(())
 }
@@ -169,13 +171,11 @@ pub fn refresh(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<TrayState>();
     let count = state.unread.load(Ordering::Relaxed);
     let lit = count > 0 && !state.dim.load(Ordering::Relaxed);
-    let show_badge = app
-        .state::<crate::settings::SettingsState>()
-        .get()
-        .show_unread_badge;
+    let settings = app.state::<crate::settings::SettingsState>().get();
+    let show_badge = settings.show_unread_badge;
     let tray = app.tray_by_id("main-tray").ok_or("Tray is unavailable")?;
-    tray.set_icon(Some(tray_icon(lit).map_err(|e| e.to_string())?))
-        .map_err(|e| e.to_string())?;
+    let icon = tray_icon(lit, settings.tray_icon_style).map_err(|e| e.to_string())?;
+    tray.set_icon(Some(icon)).map_err(|e| e.to_string())?;
     #[cfg(target_os = "windows")]
     {
         tray.set_tooltip(Some(if count == 0 {
@@ -204,12 +204,24 @@ pub fn refresh(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn tray_icon(lit: bool) -> tauri::Result<Image<'static>> {
-    let image = Image::from_bytes(if lit {
-        include_bytes!("../icons/tray-unread.png").as_slice()
-    } else {
-        include_bytes!("../icons/tray-read.png").as_slice()
+fn tray_icon(lit: bool, style: TrayIconStyle) -> tauri::Result<Image<'static>> {
+    let image = Image::from_bytes(match (style, lit) {
+        (TrayIconStyle::Color, true) => include_bytes!("../icons/tray-unread.png").as_slice(),
+        (TrayIconStyle::Color, false) => include_bytes!("../icons/tray-read.png").as_slice(),
+        // Outline icons are white masks: unread fills the bubble in.
+        (_, true) => include_bytes!("../icons/tray-outline-unread.png").as_slice(),
+        (_, false) => include_bytes!("../icons/tray-outline-read.png").as_slice(),
     })?;
+    let image = if style == TrayIconStyle::Black {
+        tint(&image, [0, 0, 0])
+    } else {
+        image
+    };
+    // Status notifier hosts (Plasma, GNOME's AppIndicator extension) scale the
+    // icon to the whole slot, while theme icons leave a margin around the
+    // glyph; without one the full-bleed bubble towers over its neighbours.
+    #[cfg(target_os = "linux")]
+    let image = pad(&image, image.width() * 7 / 6);
     // The shell shrinks oversized tray icons with a crude filter that leaves
     // jagged edges, so hand it one at exactly the small-icon size.
     #[cfg(target_os = "windows")]
@@ -222,6 +234,26 @@ fn tray_icon(lit: bool) -> tauri::Result<Image<'static>> {
         downscale(&image, size.max(1) as u32)
     };
     Ok(image)
+}
+
+fn tint(image: &Image<'_>, rgb: [u8; 3]) -> Image<'static> {
+    let mut rgba = image.rgba().to_vec();
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        pixel[..3].copy_from_slice(&rgb);
+    }
+    Image::new_owned(rgba, image.width(), image.height())
+}
+
+/// Centres a square image on a transparent `size` × `size` canvas.
+#[cfg(any(target_os = "linux", test))]
+fn pad(image: &Image<'_>, size: u32) -> Image<'static> {
+    let (width, offset) = (image.width(), (size - image.width()) / 2);
+    let mut rgba = vec![0; (size * size * 4) as usize];
+    for (y, row) in image.rgba().chunks_exact((width * 4) as usize).enumerate() {
+        let start = (((y as u32 + offset) * size + offset) * 4) as usize;
+        rgba[start..start + row.len()].copy_from_slice(row);
+    }
+    Image::new_owned(rgba, size, size)
 }
 
 /// Box-filters a square image down to `size`, averaging colour weighted by
@@ -325,6 +357,49 @@ mod tests {
     }
 
     #[test]
+    fn pad_centres_the_image_on_a_transparent_canvas() {
+        let padded = pad(&Image::new_owned(vec![255; 2 * 2 * 4], 2, 2), 4);
+        assert_eq!((padded.width(), padded.height()), (4, 4));
+        let alpha = |x: u32, y: u32| padded.rgba()[((y * 4 + x) * 4 + 3) as usize];
+        assert_eq!(
+            [alpha(0, 0), alpha(1, 1), alpha(2, 2), alpha(3, 3)],
+            [0, 255, 255, 0]
+        );
+    }
+
+    #[test]
+    fn outline_styles_share_a_mask_in_different_colours() {
+        let white = tray_icon(false, TrayIconStyle::White).unwrap();
+        let black = tray_icon(false, TrayIconStyle::Black).unwrap();
+        let opaque = |image: &Image<'_>| {
+            image
+                .rgba()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .find(|p| p[3] == 255)
+                .unwrap()
+                .to_vec()
+        };
+        assert_eq!(opaque(&white), [255; 4]);
+        assert_eq!(opaque(&black), [0, 0, 0, 255]);
+        let alpha = |image: &Image<'_>| {
+            image
+                .rgba()
+                .iter()
+                .skip(3)
+                .step_by(4)
+                .copied()
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(alpha(&white), alpha(&black));
+        assert_ne!(
+            alpha(&white),
+            alpha(&tray_icon(true, TrayIconStyle::White).unwrap())
+        );
+    }
+
+    #[test]
     fn downscale_averages_colour_and_coverage() {
         // Left half opaque red, right half transparent black.
         let mut rgba = Vec::new();
@@ -343,7 +418,9 @@ mod tests {
         assert_eq!(&edge[..3], [255, 0, 0]);
         assert!(edge[3] > 0 && edge[3] < 255);
         assert_eq!(
-            downscale(&tray_icon(true).unwrap(), 16).rgba().len(),
+            downscale(&tray_icon(true, TrayIconStyle::Color).unwrap(), 16)
+                .rgba()
+                .len(),
             16 * 16 * 4
         );
     }

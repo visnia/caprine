@@ -9,6 +9,7 @@ export type Settings = {
 	launchMinimized: boolean;
 	quitOnWindowClose: boolean;
 	showTrayIcon: boolean;
+	trayIconStyle: 'color' | 'white' | 'black';
 	showUnreadBadge: boolean;
 	debugNotifications: boolean;
 	muteNotifications: boolean;

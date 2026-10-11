@@ -92,16 +92,21 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 		control.addEventListener('click', () => { void run(control, callback); });
 	};
 	const appearance = section('Appearance');
-	const theme = element('select', 'caprine-settings-select');
-	theme.setAttribute('aria-label', 'Theme');
-	for (const [value, text] of [['system', 'System'], ['light', 'Light'], ['dark', 'Dark'], ['oled', 'OLED']]) {
-		const option = element('option', '', text);
-		option.value = value!;
-		theme.append(option);
-	}
-	controls.set('theme', theme);
-	row(appearance, 'Theme', 'Follow the system or choose a light, dark or OLED theme.').append(theme);
-	theme.addEventListener('change', () => { void run(theme, () => client.update({setting: 'theme', value: theme.value as Settings['theme']})); });
+	type ChoiceKey = 'theme' | 'trayIconStyle';
+	const select = <K extends ChoiceKey>(parent: HTMLElement, label: string, description: string, setting: K, choices: Array<[Settings[K], string]>) => {
+		const input = element('select', 'caprine-settings-select');
+		input.setAttribute('aria-label', label);
+		for (const [value, text] of choices) {
+			const option = element('option', '', text);
+			option.value = value;
+			input.append(option);
+		}
+		controls.set(setting, input);
+		row(parent, label, description).append(input);
+		input.addEventListener('change', () => { void run(input, () => client.update({setting, value: input.value} as SettingUpdate)); });
+	};
+	select(appearance, 'Theme', 'Follow the system or choose a light, dark or OLED theme.', 'theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark'], ['oled', 'OLED']]);
+	select(appearance, 'Tray icon style', 'Use the Messenger logo or a monochrome outline that matches the panel.', 'trayIconStyle', [['color', 'Color'], ['white', 'White outline'], ['black', 'Black outline']]);
 	const stepper = element('div', 'caprine-settings-stepper');
 	const decrease = button('−');
 	const increase = button('+');
