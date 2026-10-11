@@ -1,7 +1,9 @@
-import {app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Notification, screen, shell, WebContentsView, type IpcMainEvent, type IpcMainInvokeEvent, type Rectangle} from 'electron';
+import {app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, WebContentsView, type IpcMainEvent, type IpcMainInvokeEvent, type Rectangle} from 'electron';
+import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {MESSENGER, zoomStep, type MessageNotice, type Settings} from '../shared';
+import {createNotifier, type Click} from './notifications';
 import {changed, loadSettings, saveSettings, setLaunchAtLogin} from './settings';
 import {installTitleBar, titleBarHeight, titleBarOptions} from './title-bar';
 import {createTray} from './tray';
@@ -91,20 +93,19 @@ app.whenReady().then(() => {
 	app.on('web-contents-created', (_, created) => guard(created));
 	guard(contents);
 
-	// References keep click handlers alive until the notification is gone.
-	const shown = new Set<Notification>();
-	const notify = (options: Electron.NotificationConstructorOptions, click: () => void) => {
-		const notification = new Notification({icon: appIcon, ...options});
-		shown.add(notification);
-		notification.on('click', () => { shown.delete(notification); click(); });
-		notification.on('close', () => shown.delete(notification));
-		notification.show();
+	const notify = createNotifier(appIcon);
+	const notice = (title: string, body: string, click: Click) => notify({title, body, sound: settings.notificationSound === 'off' ? null : 'message'}, click);
+	// On Wayland a window takes focus only with the click's activation token,
+	// which Electron accepts only on a second instance's command line.
+	const showFrom = (token?: string) => {
+		if (!token) return show();
+		spawn(process.execPath, [...process.argv.slice(1).filter(arg => arg !== '--autostart'), `--xdg-activation-token=${token}`], {stdio: 'ignore'})
+			.on('error', show).unref();
 	};
-	const notice = (title: string, body: string, click: () => void) => notify({title, body, silent: settings.notificationSound === 'off'}, click);
 
 	configureSession(contents.session, (file, name) => {
 		if (file) notice('Download complete', name, () => shell.showItemInFolder(file));
-		else notice('Download failed', name, show);
+		else notice('Download failed', name, showFrom);
 	});
 
 	const tray = createTray(window, () => settings, show, quit);
@@ -188,11 +189,11 @@ app.whenReady().then(() => {
 		notify({
 			title: String(message.title).slice(0, 256),
 			body: settings.notificationPreview ? String(message.body).slice(0, 2048) : 'You have a new message',
-			// Only one of Messenger's tone and the platform sound plays.
-			silent: settings.notificationSound !== 'system',
 			...(icon && !icon.isEmpty() ? {icon} : {}),
-		}, () => {
-			show();
+			// Only one of Messenger's tone and the platform sound plays.
+			sound: settings.notificationSound === 'system' ? 'message-new-instant' : null,
+		}, token => {
+			showFrom(token);
 			if (message.threadUrl && isMessenger(message.threadUrl)) send('open-thread', message.threadUrl);
 		});
 		if (settings.flashTaskbar) window.flashFrame(true);
