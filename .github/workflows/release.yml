@@ -55,13 +55,17 @@ jobs:
           scripts/appimage-enchant.sh "$RUNNER_TEMP/enchant"
           # linuxdeploy bundles the libenchant WebKitGTK links against.
           sudo install -m 644 "$RUNNER_TEMP/enchant/libenchant-2.so.2" "$(readlink -f /usr/lib/x86_64-linux-gnu/libenchant-2.so.2)"
-          echo "TAURI_CONFIG={\"bundle\":{\"linux\":{\"appimage\":{\"files\":{\"/usr/lib/enchant-2\":\"$RUNNER_TEMP/enchant/enchant-2\",\"/usr/lib/libhunspell-1.7.so.0\":\"$RUNNER_TEMP/enchant/libhunspell-1.7.so.0\"}}}}}" >> "$GITHUB_ENV"
+          echo "{\"bundle\":{\"linux\":{\"appimage\":{\"files\":{\"/usr/lib/enchant-2\":\"$RUNNER_TEMP/enchant/enchant-2\",\"/usr/lib/libhunspell-1.7.so.0\":\"$RUNNER_TEMP/enchant/libhunspell-1.7.so.0\"}}}}}" > "$RUNNER_TEMP/appimage-enchant.conf.json"
+          echo "APPIMAGE_CONFIG=$RUNNER_TEMP/appimage-enchant.conf.json" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm test
       - name: Rust tests
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - name: Build signed bundles
-        run: npm run tauri -- build --bundles ${{ matrix.bundles }} -- --locked
+        shell: bash
+        # The CLI merges extra config only from --config; it sets TAURI_CONFIG
+        # for the Rust build but never reads it for bundling.
+        run: npm run tauri -- build --bundles ${{ matrix.bundles }} ${APPIMAGE_CONFIG:+--config "$APPIMAGE_CONFIG"} -- --locked
       - name: Check the AppImage's spell checker finds system dictionaries
         if: runner.os == 'Linux'
         working-directory: ${{ runner.temp }}
