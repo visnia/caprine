@@ -47,6 +47,7 @@ Files (`<app data>` is `%APPDATA%\com.visnia.caprine` on Windows, or `$XDG_DATA_
 - **Spell checking**: WebView2 has no native spell-check switch, so turning it off sets the HTML `spellcheck` attribute on Messenger's text fields. On Linux, WebKitGTK spell checking uses your locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`) and needs the matching Enchant/Hunspell dictionaries.
 - **Hardware acceleration off**: WebView2 gets `--disable-gpu`; WebKitGTK gets the `NEVER` acceleration policy.
 - **Windows notifications** need the Start Menu shortcut created by the installer (AppUserModelID `com.visnia.caprine`). Debug builds create a separate `caprine Debug` shortcut.
+- **Debug builds** use the identifier `com.visnia.caprine.dev`, so they keep their own settings, webview profile, single-instance lock and autostart entry. On Linux they run on the system WebKitGTK, which can upgrade the profile to a storage format the AppImage's older WebKitGTK cannot read; Messenger then never gets past its loading skeleton.
 
 ## Notification design and known limits
 

@@ -185,7 +185,16 @@ pub(crate) fn open_link(app: &tauri::AppHandle, url: &str) -> Result<(), String>
 }
 
 fn main() {
-    let context = tauri::generate_context!();
+    #[cfg_attr(not(debug_assertions), allow(unused_mut))]
+    let mut context = tauri::generate_context!();
+    // Debug builds run on the system WebKit, which can migrate the profile to
+    // a storage format the AppImage's older WebKit cannot read. A separate
+    // identifier keeps their profile, single-instance lock, autostart and
+    // desktop entry apart from the installed app.
+    #[cfg(debug_assertions)]
+    {
+        context.config_mut().identifier.push_str(".dev");
+    }
     // Match the NSIS shortcut's AUMID before creating any native windows.
     #[cfg(target_os = "windows")]
     {
