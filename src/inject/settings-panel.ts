@@ -122,7 +122,7 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 	const behavior = section('App behavior');
 	toggle(behavior, 'Always on top', 'Keep Caprine above other windows.', 'alwaysOnTop');
 	toggle(behavior, 'Launch at login', 'Start Caprine when you sign in to your computer.', 'launchAtLogin');
-	toggle(behavior, 'Launch minimized', 'Start in the system tray. Available only while Launch at login is on.', 'launchMinimized');
+	toggle(behavior, 'Launch minimized', 'Start in the system tray when launched at login. Available only while Launch at login is on.', 'launchMinimized');
 	toggle(behavior, 'Quit on window close', 'Exit instead of keeping Caprine in the system tray.', 'quitOnWindowClose');
 	toggle(behavior, 'Tray icon', 'Show Caprine in the system tray. Can be hidden only while Quit on window close is on.', 'showTrayIcon');
 	const media = section('Messages & media');

@@ -324,7 +324,9 @@ fn main() {
             // its controller visibility. Saved visibility never traps startup.
             window.show()?;
             // The panel disables Launch minimized while Launch at login is off.
-            if settings.launch_at_login && settings.launch_minimized { tray::park(app.handle())?; }
+            // Only the login entry passes --autostart; a manual launch shows the window.
+            let autostarted = std::env::args().any(|arg| arg == "--autostart");
+            if settings.launch_at_login && settings.launch_minimized && autostarted { tray::park(app.handle())?; }
             Ok(())
         })
         .build(context)
