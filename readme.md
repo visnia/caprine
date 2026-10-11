@@ -1,111 +1,76 @@
 # caprine
 
-A minimal desktop wrapper for **[Messenger](https://www.messenger.com)** on **Windows** and **Linux**, built with Tauri 2. It always loads `https://www.messenger.com`, so it works with Messenger-only accounts. Reliable desktop notifications are the main goal.
+A minimal desktop wrapper for **[Messenger](https://www.messenger.com)** on **Windows** and **Linux**, built with Electron. It always loads `https://www.messenger.com`, so it works with Messenger-only accounts. Reliable desktop notifications are the main goal.
 
-This is a fork of [Caprine](https://github.com/sindresorhus/caprine), rewritten from Electron to Tauri. It is **pre-release software**: download it from [Releases](https://github.com/visnia/caprine/releases). The Electron version is kept on the [`electron-legacy`](https://github.com/visnia/caprine/tree/electron-legacy) branch. It is not affiliated with Meta.
-
-There is no macOS build and no native application menu bar. Settings live in an in-page drawer.
+This is a fork of [Caprine](https://github.com/sindresorhus/caprine), rewritten from scratch for current Electron. It is not affiliated with Meta. There is no macOS build and no application menu bar; settings live in an in-page drawer.
 
 ## Features
 
-- **Persistent session** in a dedicated platform-webview profile (WebView2 on Windows, WebKitGTK on Linux). Nothing is imported from Electron Caprine or the upstream app ID.
-- **Native notifications** for new messages. Messenger's web app shows none itself, so Caprine detects them from the sidebar's unread marker and preview, plus Messenger's message tone for repeated previews; the engine's notification hook stays in place in case Messenger ever calls it. Notifications are suppressed when **Desktop notifications** is off or Caprine is focused. Clicking one opens its conversation. **Notification sound** picks one sound per message: Messenger's own tone (the default, with a silent notification), the system notification sound (Messenger's tone muted; plays only when a notification is shown) or none. Off also silences download and update notices.
-- **Unread badge**: read/unread tray icon, Windows taskbar overlay (up to `99+`) and tray tooltip. While chats are unread and Caprine is not focused, the tray icon blinks between colour and grey and the taskbar badge blinks with it. On Linux, a tray count where the desktop supports tray titles.
-- **Tray and window lifecycle**: close to tray (or quit on close), launch at login, launch minimized, always on top, single instance, and remembered window size/position.
-- **Appearance**: system/light/dark/OLED theme, Caprine's code-block and scrollbar styles, your own `custom.css`, and text zoom with **Ctrl+=**, **Ctrl+-** and **Ctrl+0** (persisted).
+- **Notifications** for new messages. Messenger's web app shows none itself, so Caprine detects them from the sidebar (a chat turning unread or its preview changing) and from Messenger's message tone (a repeated preview in a chat that is already unread). If Messenger ever calls `new Notification()`, that is routed through the same path. Notifications are skipped while Caprine is focused or **Desktop notifications** is off. Clicking one opens its chat.
+- **Notification sound**: Messenger's own tone (default, silent notifications), the system notification sound (Messenger's tone muted), or none. Off also silences download and update notices.
+- **Unread badge**: read/unread tray icon and tooltip, the Windows taskbar overlay (up to `99+`) and the Linux launcher count. While chats are unread and Caprine is not focused, the tray icon and badge blink.
+- **Tray and window**: close to tray, or quit on close with no tray icon; launch at login, launch minimized, always on top, single instance, remembered window size and position.
+- **Appearance**: system/light/dark/OLED theme, which Caprine's own title bar follows too, code-block and scrollbar styles, your own `custom.css`, text zoom with **Ctrl+=**, **Ctrl+-** and **Ctrl+0**.
 - **Links** open in your default browser, with Facebook `l.php` tracking redirects removed.
-- **Calls** open in separate windows. Camera, microphone and screen capture are allowed for `https://www.messenger.com` only.
-- **Downloads** go to your Downloads folder without overwriting, and a notification reveals the file.
-- **Offline recovery**: if Messenger cannot load, a retry page appears and Caprine retries automatically with backoff.
-- **Video autoplay**, **spell checking** and **hardware acceleration** toggles.
-- **Signed automatic updates** from this repository's GitHub releases.
+- **Calls** open in separate windows. Camera, microphone and screen sharing are allowed for `https://www.messenger.com` only. Screen sharing shares the whole primary screen (on Wayland the desktop's own picker appears).
+- **Downloads** go to your Downloads folder without overwriting; a notification reveals the file.
+- **Offline recovery**: if Messenger cannot load, a retry page appears and Caprine retries with backoff.
+- **Spell checking** with suggestions in the context menu: the Windows spell checker, or Hunspell dictionaries for your system languages on Linux (downloaded by Electron on first use).
+- **Autoplay videos** and **hardware acceleration** toggles.
+- **Automatic updates** from this repository's GitHub releases (NSIS installer and AppImage).
 
-## Settings
+## Keyboard shortcuts
 
-Open the drawer with **Ctrl+,** or the gear button.
-
-| Section | Settings |
+| Shortcut | Action |
 | --- | --- |
-| Appearance | Theme, text size, unread badge |
-| App behavior | Always on top, launch at login, launch minimized, quit on window close |
-| Messages & media | Autoplay videos, spell checking |
-| Notifications | Desktop notifications on/off, message preview (off shows `You have a new message`), flash taskbar (Windows) |
-| Advanced | Debug notifications, hardware acceleration (applies after **Relaunch Caprine**), custom styles |
-| Updates | Automatic update checks, check now / install & restart |
+| Ctrl+, | Settings |
+| Ctrl+= / Ctrl+- / Ctrl+0 | Text size |
+| Ctrl+R | Reload (applies `custom.css`) |
+| F12, Ctrl+Shift+I | Developer tools |
 
-Files (`<app data>` is `%APPDATA%\com.visnia.caprine` on Windows, or `$XDG_DATA_HOME/com.visnia.caprine` on Linux, defaulting to `~/.local/share`):
+## Files
+
+`<data>` is `%APPDATA%\com.visnia.caprine` on Windows and `~/.config/com.visnia.caprine` on Linux. Development runs (`npm start`) use `com.visnia.caprine.dev` instead, so they keep their own settings, session and autostart entry.
 
 - `settings.json`: settings.
-- `custom.css`: your styles. Press **Ctrl+R** to reload after editing.
-- `notifications.jsonl`: debug log, only while **Debug notifications** is on. It rotates at 1 MiB and may contain conversation names and IDs.
-- Webview profile: `%LOCALAPPDATA%\com.visnia.caprine\webview` on Windows; `com.visnia.caprine/webview` under the local data directory on Linux.
+- `custom.css`: your styles (**Open CSS** in settings creates it).
+- `window.json`: window size and position.
+- Everything else is the Chromium profile, including your Messenger session.
 
-## Platform notes
+On first launch, `settings.json` and `custom.css` from the Tauri builds are reused (on Linux they are copied from `~/.local/share/com.visnia.caprine`). The Messenger session cannot be carried over, so you sign in once more.
 
-- **Tray**: on Windows, left-clicking the tray icon toggles the window. On Linux, left-click opens the Show / Quit menu, because Tauri does not deliver Linux tray clicks.
-- **Closing to the tray**: Windows minimizes the window and removes its taskbar entry without hiding or suspending WebView2, and uses `--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows`. Linux hides the window.
-- **Spell checking**: WebView2 has no native spell-check switch, so turning it off sets the HTML `spellcheck` attribute on Messenger's text fields. On Linux, WebKitGTK spell checking uses your locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`). The AppImage bundles Enchant with its Hunspell provider and reads the system's Hunspell dictionaries, so install the one for your language (for example `hunspell-pl`).
-- **Hardware acceleration off**: WebView2 gets `--disable-gpu`; WebKitGTK gets the `NEVER` acceleration policy.
-- **Windows notifications** need the Start Menu shortcut created by the installer (AppUserModelID `com.visnia.caprine`). Debug builds create a separate `caprine Debug` shortcut.
-- **Debug builds** use the identifier `com.visnia.caprine.dev`, so they keep their own settings, webview profile, single-instance lock and autostart entry. On Linux they run on the system WebKitGTK, which can upgrade the profile to a storage format the AppImage's older WebKitGTK cannot read; Messenger then never gets past its loading skeleton.
+## Code layout
 
-## Notification design and known limits
-
-Native WebView2 `NotificationReceived` / WebKitGTK `show-notification` events are the primary source, and Caprine presents them itself. Page hooks on `Notification` and `showNotification` only supply metadata and always call the real APIs. A backend worker correlates the two by tag/title/time and arbitrates against the sidebar fallback by conversation and time. It never deduplicates by message text.
-
-- WebView2's hook covers **non-persistent** notifications only, and page hooks cannot see a service worker's `showNotification`. In the measured logged-in session, Messenger registered **no** service worker (0 registrations, null controller at startup and after 10+ minutes), so this gap is currently not applicable. Debug mode samples the count hourly. A nonzero count reopens the investigation.
-- Clicking a toast works while Caprine is running, including from the Windows Action Center after the banner times out. Clicking an old toast after Caprine has quit and restarted is **not implemented**.
-- A conversation whose identity cannot be determined is never guessed: its click only restores the window.
-
-## Updates
-
-Release builds check `https://github.com/visnia/caprine/releases/latest/download/latest.json` 60 seconds after startup and every 6 hours, when enabled. They announce a new version once, and install only after you click. Every download is verified against the minisign public key in `src-tauri/tauri.conf.json`, and its signed version must match the announced version.
-
-| Package | Update path |
+| Path | What |
 | --- | --- |
-| Windows NSIS installer | Downloads and runs the installer in passive mode; Caprine exits and restarts. |
-| Linux AppImage | Replaces the AppImage, then restarts. |
-| Debug builds, raw binaries | Updates are unavailable. |
+| `src/main/index.ts` | App lifecycle, window, IPC, notifications, shortcuts, offline retry |
+| `src/main/settings.ts` | Loading, validating and saving settings; launch at login |
+| `src/main/web.ts` | Navigation, popups, permissions, downloads, context menu |
+| `src/main/title-bar.ts`, `src/preload/title-bar.ts` | The themed title bar and its window buttons |
+| `src/main/tray.ts` | Tray icon, unread badge, blinking |
+| `src/main/updates.ts` | `electron-updater` |
+| `src/preload/index.ts` | Wires the page integration to the main process |
+| `src/preload/main-world.ts` | Runs in Messenger's own world: autoplay/tone guard, `Notification` hook |
+| `src/preload/collector.ts`, `unread.ts`, `selectors.ts` | New-message and unread detection from the sidebar |
+| `src/preload/settings-panel.ts`, `styles.ts`, `css/` | Settings drawer and styles |
 
 ## Building
 
-Requires Node.js 24 and stable Rust.
-
-- **Windows** also needs the Visual Studio C++ workload and WebView2 Runtime 128.0.2739.15 or later.
-- **Linux** needs the GTK 3 / WebKitGTK 4.1 development packages: `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf`.
+Requires Node.js 24.
 
 ```sh
 npm ci
-npm start                         # development run
-npm test                          # TypeScript checks and JavaScript tests
-npm run build:app -- --debug      # target/debug executable, no installer
-npm run dist:win:unsigned         # local NSIS installer without updater signatures
-npm run dist:linux:unsigned       # local AppImage without updater signatures
+npm start              # build and run
+npm test               # type checks and tests
+npm run dist:win       # NSIS installer in release/
+npm run dist:linux     # AppImage in release/
 ```
 
-Quit a running Caprine from its tray menu before starting another build; closing the window may only park it in the tray.
-
-`npm run dist:win` / `dist:linux` produce updater signatures and need `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-
-Releases come from pushing a `v<version>` tag that matches `tauri.conf.json`. The Release workflow builds Windows NSIS and Linux AppImage, signs them, verifies the signed versions, writes `latest.json` and creates a **draft** GitHub release. Publishing the draft makes it visible to the updater. The workflow needs the two signing secrets above in the repository.
-
-## Verification status
-
-Build success does not prove runtime behavior; the checks below are kept separate.
-
-| Area | Status |
-| --- | --- |
-| Windows CI and Linux CI (type checks, tests, fmt, clippy, native build) | Passing on every phase pushed so far; see Actions. |
-| Fresh sign-in and persistence, settings drawer, theme/zoom persistence, Ctrl+0, close to tray, tray toggle, single instance (Windows) | **Verified by the user** on 2026-10-04. |
-| Signed NSIS updater artifact (Windows) | Verified locally: signature checks against the committed key, a tampered file is rejected, and the signed version matches. |
-| Unread badge/overlay, notification delivery, duplicates, click destinations, Action Center, mute/preview/flash, 30+ minute idle delivery | **Pending**. |
-| Calls, downloads, offline recovery, autoplay, spell checking, hardware acceleration, update installation | **Pending** runtime checks (same document). |
-| Autostart and window-geometry persistence | Implemented; not yet checked by the user. |
-| Any Linux desktop runtime behavior, Linux release bundles | **Not tested**: no Linux desktop was available; CI only compiles and unit-tests Linux. |
+Releases come from pushing a `v<version>` tag that matches `package.json`. The Release workflow builds both platforms and uploads them, with the updater's `latest.yml` / `latest-linux.yml`, to a **draft** GitHub release. Publishing the draft makes it visible to the updater. Builds are not code-signed.
 
 ## Not included
 
-macOS; native menus; private mode; typing/seen/delivery-receipt blocking; emoji style customization; spell-check language selection; Work Chat; inline reply; conversation navigation commands and jump lists. **Ringtone muting** is not implemented: Electron Caprine blocked the ringtone by a response header that page scripts cannot see, and no reliable, ringtone-specific target has been measured.
+macOS; native menus; private mode; typing/seen receipt blocking; emoji style customization; spell-check language selection; Work Chat; inline reply; conversation navigation shortcuts; ringtone muting.
 
 ## License
 

@@ -1,39 +1,35 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import vm from 'node:vm';
-import {build} from 'esbuild';
+import {load} from './load.mjs';
 
-const {outputFiles} = await build({entryPoints: ['src/inject/settings.ts'], bundle: true, write: false, format: 'iife', globalName: 'settings'});
-const initial = {theme: 'system', zoomFactor: 1, alwaysOnTop: false, launchAtLogin: false,
-	launchMinimized: false, quitOnWindowClose: false, showUnreadBadge: true, debugNotifications: false};
+const {sanitize, changed} = await load('src/main/settings.ts', {electron: {app: {}}});
+const defaults = sanitize({});
 
-test('rapid zoom shortcuts are serialized against the last saved value', async () => {
-	let stored = {...initial};
-	const context = vm.createContext({window: {__TAURI_INTERNALS__: {invoke: async (command, {update} = {}) => {
-		if (command === 'update_setting') stored = {...stored, [update.setting]: update.value};
-		return stored;
-	}}}});
-	vm.runInContext(outputFiles[0].text, context);
-	const client = context.settings.createSettingsClient(initial);
-	await Promise.all(Array.from({length: 3}, () => client.update(value => context.settings.zoomUpdate(value, 'in'))));
-	assert.equal(stored.zoomFactor, 1.3);
-	await client.update(value => context.settings.zoomUpdate(value, 'reset'));
-	assert.equal(stored.zoomFactor, 1);
+test('stored settings keep valid values and drop unknown or invalid ones', () => {
+	const settings = sanitize({theme: 'oled', zoomFactor: 3, alwaysOnTop: 'yes', debugNotifications: true, trayIconStyle: 'red', autoUpdate: false});
+	assert.equal(settings.theme, 'oled');
+	assert.equal(settings.zoomFactor, 1);
+	assert.equal(settings.alwaysOnTop, false);
+	assert.equal(settings.trayIconStyle, 'color');
+	assert.equal(settings.autoUpdate, false);
+	assert.equal('debugNotifications' in settings, false);
 });
 
-test('failed setting writes restore backend state and do not block the next update', async () => {
-	let stored = {...initial};
-	const context = vm.createContext({window: {__TAURI_INTERNALS__: {invoke: async (command, {update} = {}) => {
-		if (command === 'update_setting') {
-			if (update.setting === 'launchAtLogin') throw new Error('autostart unavailable');
-			stored = {...stored, [update.setting]: update.value};
-		}
-		return stored;
-	}}}});
-	vm.runInContext(outputFiles[0].text, context);
-	const client = context.settings.createSettingsClient(initial);
-	await assert.rejects(client.update({setting: 'launchAtLogin', value: true}), /autostart unavailable/);
-	assert.equal(client.get().launchAtLogin, false);
-	await client.update({setting: 'theme', value: 'dark'});
-	assert.equal(client.get().theme, 'dark');
+test('the old on/off sound switch is read as Messenger or Off', () => {
+	assert.equal(sanitize({notificationSound: true}).notificationSound, 'messenger');
+	assert.equal(sanitize({notificationSound: false}).notificationSound, 'off');
+	assert.equal(sanitize({notificationSound: 'system'}).notificationSound, 'system');
+});
+
+test('updates reject unknown settings, wrong types and invalid zoom', () => {
+	for (const [key, value] of [['privateMode', true], ['__proto__', {}], ['theme', 'vibrant'], ['launchMinimized', 'false'], ['zoomFactor', 2.1], ['zoomFactor', Number.NaN]]) {
+		assert.throws(() => changed(defaults, key, value), /Invalid value/, key);
+	}
+	assert.equal(changed(defaults, 'zoomFactor', 1.5).zoomFactor, 1.5);
+});
+
+test('the removed tray icon switch is ignored and cannot be set', () => {
+	assert.equal('showTrayIcon' in sanitize({showTrayIcon: false}), false);
+	assert.throws(() => changed(defaults, 'showTrayIcon', false), /Invalid value/);
+	assert.equal(changed(defaults, 'quitOnWindowClose', true).quitOnWindowClose, true);
 });

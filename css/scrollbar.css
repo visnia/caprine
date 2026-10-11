@@ -1,7 +1,6 @@
 /* Custom native scrollbar */
 
-/* Parts are painted with backgrounds: WebKitGTK 2.50 (the AppImage's) does not
-   draw box-shadow on scrollbar parts. The thumb's transparent border insets it. */
+/* The thumb's transparent border insets it from the track. */
 
 /* Light theme */
 ::-webkit-scrollbar {

@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import {build} from 'esbuild';
 import {parseHTML} from 'linkedom';
 
-const {outputFiles} = await build({entryPoints: ['src/inject/page.ts'], bundle: true, write: false, format: 'iife', globalName: 'page'});
+const {outputFiles} = await build({entryPoints: ['src/preload/page.ts'], bundle: true, write: false, format: 'iife', globalName: 'page'});
 
 test('page kind follows the login form and the signed-in conversation list', async () => {
 	const {document, window} = parseHTML('<html><body><main></main></body></html>');

@@ -1,121 +1,39 @@
 name: Release
 
-# Push a tag matching tauri.conf.json's version (for example v3.0.0-alpha.2).
-# The result is a draft release: publishing it makes latest.json reachable at
-# releases/latest/download, which is the updater endpoint.
+# Push a tag matching package.json's version (for example v4.0.0). The result
+# is a draft release; publishing it makes latest.yml / latest-linux.yml
+# visible to the in-app updater.
 on:
   push:
     tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
+  release:
     strategy:
       fail-fast: true
       matrix:
         include:
           - os: windows-latest
-            platform: windows
-            bundles: nsis
+            platform: win
           # Older glibc baseline for the AppImage.
           - os: ubuntu-22.04
             platform: linux
-            bundles: appimage
     runs-on: ${{ matrix.os }}
-    env:
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
-      - name: Require the updater signing key
-        shell: bash
-        run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error::Set the TAURI_SIGNING_PRIVATE_KEY (and _PASSWORD) repository secrets."
-            exit 1
-          fi
       - name: Check tag matches version
         shell: bash
-        run: node -e "const v=require('./src-tauri/tauri.conf.json').version; if ('v'+v !== process.env.GITHUB_REF_NAME) { console.error('tag', process.env.GITHUB_REF_NAME, 'version', v); process.exit(1) }"
+        run: node -e "const v=require('./package.json').version; if ('v'+v !== process.env.GITHUB_REF_NAME) { console.error('tag', process.env.GITHUB_REF_NAME, 'version', v); process.exit(1) }"
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        # bundleMediaFramework copies the runner's GStreamer plugins: libav
-        # decodes H.264/AAC and plugins-bad parses H.264 for Messenger's videos.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf file gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav libhunspell-dev hunspell-en-us
-      - name: Build enchant for the AppImage
-        if: runner.os == 'Linux'
-        run: |
-          scripts/appimage-enchant.sh "$RUNNER_TEMP/enchant"
-          # linuxdeploy bundles the libenchant WebKitGTK links against.
-          sudo install -m 644 "$RUNNER_TEMP/enchant/libenchant-2.so.2" "$(readlink -f /usr/lib/x86_64-linux-gnu/libenchant-2.so.2)"
-          echo "{\"bundle\":{\"linux\":{\"appimage\":{\"files\":{\"/usr/lib/enchant-2\":\"$RUNNER_TEMP/enchant/enchant-2\",\"/usr/lib/libhunspell-1.7.so.0\":\"$RUNNER_TEMP/enchant/libhunspell-1.7.so.0\"}}}}}" > "$RUNNER_TEMP/appimage-enchant.conf.json"
-          echo "APPIMAGE_CONFIG=$RUNNER_TEMP/appimage-enchant.conf.json" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm test
-      - name: Rust tests
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - name: Build signed bundles
-        shell: bash
-        # The CLI merges extra config only from --config; it sets TAURI_CONFIG
-        # for the Rust build but never reads it for bundling.
-        run: npm run tauri -- build --bundles ${{ matrix.bundles }} ${APPIMAGE_CONFIG:+--config "$APPIMAGE_CONFIG"} -- --locked
-      - name: Check the AppImage's spell checker finds system dictionaries
-        if: runner.os == 'Linux'
-        working-directory: ${{ runner.temp }}
-        run: |
-          "$GITHUB_WORKSPACE"/src-tauri/target/release/bundle/appimage/*.AppImage --appimage-extract > /dev/null
-          LD_LIBRARY_PATH="$PWD/squashfs-root/usr/lib" python3 -I - "$PWD/squashfs-root/usr/lib/libenchant-2.so.2" <<'EOF'
-          import ctypes, sys
-          enchant = ctypes.CDLL(sys.argv[1])
-          enchant.enchant_broker_init.restype = ctypes.c_void_p
-          enchant.enchant_broker_dict_exists.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-          if not enchant.enchant_broker_dict_exists(enchant.enchant_broker_init(), b"en_US"):
-              sys.exit("The bundled enchant does not find the system en_US dictionary.")
-          EOF
-      - name: Check the AppImage bundles the H.264 and AAC decoders
-        if: runner.os == 'Linux'
-        working-directory: ${{ runner.temp }}
-        run: |
-          for plugin in libgstlibav.so libgstvideoparsersbad.so; do
-            test -f "squashfs-root/usr/lib/gstreamer-1.0/$plugin" || { echo "::error::The AppImage lacks $plugin."; exit 1; }
-          done
-      - name: Collect and verify signatures
-        run: node scripts/release-artifacts.mjs collect ${{ matrix.platform }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-${{ matrix.platform }}
-          path: release/
-          if-no-files-found: error
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: release-*
-          path: release
-          merge-multiple: true
-      - name: Write updater manifest
-        run: node scripts/release-artifacts.mjs manifest "$GITHUB_REF_NAME"
-      - name: Create draft release
+      - name: Build and upload to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" release/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft \
-            --title "caprine $GITHUB_REF_NAME" \
-            --notes "Windows: NSIS installer. Linux: AppImage. The in-app updater verifies the minisign signatures in latest.json."
+        run: npx electron-builder --${{ matrix.platform }} --publish always

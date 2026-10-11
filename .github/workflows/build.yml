@@ -1,4 +1,4 @@
-name: Tauri build
+name: Build
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: tauri-build-${{ github.ref }}
+  group: build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,7 +19,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-24.04]
+        include:
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-24.04
+            platform: linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -27,32 +31,39 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
       - run: npm ci
-      - name: Check injected script and IPC configuration
-        run: npm test
-      - name: Check Rust formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-      - name: Rust tests
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - name: Rust lint
-        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-      - name: Build native application
-        run: npm run build:app -- -- --locked
+      - run: npm test
+      - name: Package
+        run: npx electron-builder --${{ matrix.platform }} --publish never
+      # Hosted runners have a desktop, so this shows the real Windows title
+      # bar in each theme without a Windows machine at hand.
+      - name: Screenshot the app in each theme
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $data = Join-Path $env:APPDATA 'com.visnia.caprine'
+          New-Item -ItemType Directory -Force $data, screenshots | Out-Null
+          foreach ($theme in 'light', 'dark', 'oled') {
+            Set-Content (Join-Path $data 'settings.json') "{`"theme`": `"$theme`"}"
+            Start-Process release/win-unpacked/caprine.exe
+            Start-Sleep -Seconds 20
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
+            [System.Drawing.Graphics]::FromImage($bitmap).CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bitmap.Save("screenshots/$theme.png")
+            Get-Process caprine -ErrorAction SilentlyContinue | Stop-Process -Force
+            Start-Sleep -Seconds 3
+          }
+      - uses: actions/upload-artifact@v7
+        if: runner.os == 'Windows'
+        with:
+          name: windows-screenshots-${{ github.sha }}
+          path: screenshots/
       - uses: actions/upload-artifact@v7
         with:
-          name: caprine-${{ runner.os }}-${{ github.sha }}
+          name: caprine-${{ matrix.platform }}-${{ github.sha }}
           if-no-files-found: error
           path: |
-            src-tauri/target/release/caprine.exe
-            src-tauri/target/release/caprine
+            release/*.exe
+            release/*.AppImage

@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import {build} from 'esbuild';
 import {parseHTML} from 'linkedom';
 
-const {outputFiles} = await build({entryPoints: ['src/inject/unread.ts'], bundle: true, write: false, format: 'iife', globalName: 'unread'});
+const {outputFiles} = await build({entryPoints: ['src/preload/unread.ts'], bundle: true, write: false, format: 'iife', globalName: 'unread'});
 function page(body, title = 'Messenger') {
 	const {document, window} = parseHTML(`<html><head><title>${title}</title></head><body>${body}</body></html>`);
 	const context = vm.createContext({document, Element: window.Element, MutationObserver: window.MutationObserver, URL, queueMicrotask, console,

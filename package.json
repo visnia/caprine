@@ -1,8 +1,10 @@
 {
 	"name": "caprine",
+	"productName": "caprine",
 	"version": "3.1.4",
 	"private": true,
 	"description": "Minimal Messenger wrapper for Windows and Linux",
+	"author": "visnia",
 	"license": "MIT",
 	"repository": "github:visnia/caprine",
 	"homepage": "https://github.com/visnia/caprine",
@@ -10,27 +12,57 @@
 		"url": "https://github.com/visnia/caprine/issues"
 	},
 	"type": "module",
+	"main": "dist/main.js",
+	"desktopName": "caprine.desktop",
 	"engines": {
 		"node": ">=24"
 	},
 	"scripts": {
-		"build": "tsc --noEmit && node scripts/build-inject.mjs",
+		"build": "tsc --noEmit && node scripts/build.mjs",
 		"test": "npm run build && node --test tests/*.test.mjs",
-		"start": "tauri dev",
-		"tauri": "tauri",
-		"build:app": "tauri build --no-bundle",
-		"dist:win": "tauri build --bundles nsis",
-		"dist:linux": "tauri build --bundles appimage",
-		"dist:win:unsigned": "tauri build --bundles nsis --config src-tauri/tauri.unsigned.conf.json",
-		"dist:linux:unsigned": "tauri build --bundles appimage --config src-tauri/tauri.unsigned.conf.json"
+		"start": "npm run build && electron .",
+		"dist:win": "npm run build && electron-builder --win",
+		"dist:linux": "npm run build && electron-builder --linux"
 	},
 	"dependencies": {
-		"@tauri-apps/api": "2.12.1"
+		"electron-updater": "6.8.9"
 	},
 	"devDependencies": {
-		"@tauri-apps/cli": "2.12.1",
+		"electron": "44.7.0",
+		"electron-builder": "26.15.3",
 		"esbuild": "0.28.2",
 		"linkedom": "0.18.13",
 		"typescript": "7.0.2"
+	},
+	"build": {
+		"appId": "com.visnia.caprine",
+		"files": [
+			"dist/**",
+			"icons/**"
+		],
+		"directories": {
+			"output": "release"
+		},
+		"publish": {
+			"provider": "github",
+			"owner": "visnia",
+			"repo": "caprine",
+			"releaseType": "draft"
+		},
+		"win": {
+			"target": "nsis",
+			"icon": "icons/icon.ico"
+		},
+		"nsis": {
+			"oneClick": true,
+			"perMachine": false
+		},
+		"linux": {
+			"target": "AppImage",
+			"icon": "icons/icon.png",
+			"category": "Network",
+			"executableName": "caprine",
+			"syncDesktopName": true
+		}
 	}
 }
