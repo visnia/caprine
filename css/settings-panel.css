@@ -210,7 +210,7 @@ html[data-caprine-page='login'] .caprine-settings-launcher {
 
 .caprine-settings-content::-webkit-scrollbar-track,
 .caprine-settings-content::-webkit-scrollbar-track:hover {
-	box-shadow: none;
+	background: none;
 }
 
 .caprine-settings-content::-webkit-scrollbar-thumb {
