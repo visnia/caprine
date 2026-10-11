@@ -50,8 +50,9 @@ export function createTray(window: BrowserWindow, settings: () => Settings, show
 		}
 		tray?.setImage(trayImage(lit, trayIconStyle));
 		tray?.setToolTip(unread === 0 ? 'caprine — no unread chats' : `caprine — ${unread} unread chats`);
+		// Linux has no taskbar badge: launchers show one only for an installed
+		// desktop entry, which an AppImage does not have.
 		if (process.platform === 'win32') window.setOverlayIcon(showUnreadBadge && lit ? badge : null, lit ? `${unread} unread chats` : '');
-		else app.setBadgeCount(showUnreadBadge ? unread : 0);
 	};
 	// While chats are unread and the window is not focused, the icon and badge
 	// blink; a focused window shows them steadily.

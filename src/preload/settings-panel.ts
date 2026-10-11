@@ -127,7 +127,7 @@ export function initializeSettingsPanel(host: PanelHost) {
 	for (const [control, direction] of [[decrease, 'out'], [increase, 'in']] as const) {
 		control.addEventListener('click', () => { void run(control, () => host.update('zoomFactor', zoomStep(host.settings().zoomFactor, direction))); });
 	}
-	toggle(appearance, 'Unread badge', 'Show the unread count on the taskbar icon.', 'showUnreadBadge');
+	if (host.platform === 'win32') toggle(appearance, 'Unread badge', 'Show the unread count on the taskbar icon.', 'showUnreadBadge');
 
 	const behavior = section('App behavior');
 	toggle(behavior, 'Always on top', 'Keep Caprine above other windows.', 'alwaysOnTop');

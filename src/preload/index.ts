@@ -67,7 +67,7 @@ if (location.origin === MESSENGER && ipcRenderer.sendSync('is-main-window') === 
 			platform: state.platform,
 		});
 		ipcRenderer.on('toggle-settings', () => panel.toggle());
-		observeUnread(document, count => ipcRenderer.send('unread', count, badge(count)));
+		observeUnread(document, count => ipcRenderer.send('unread', count, state.platform === 'win32' ? badge(count) : null));
 		collector.start();
 		document.documentElement.dataset.caprineVersion = state.version;
 	}, {once: true});

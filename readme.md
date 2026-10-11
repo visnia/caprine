@@ -8,7 +8,7 @@ This is a fork of [Caprine](https://github.com/sindresorhus/caprine), rewritten 
 
 - **Notifications** for new messages. Messenger's web app shows none itself, so Caprine detects them from the sidebar (a chat turning unread or its preview changing) and from Messenger's message tone (a repeated preview in a chat that is already unread). If Messenger ever calls `new Notification()`, that is routed through the same path. Notifications are skipped while Caprine is focused or **Desktop notifications** is off. Clicking one opens its chat.
 - **Notification sound**: Messenger's own tone (default, silent notifications), the system notification sound (Messenger's tone muted), or none. Off also silences download and update notices.
-- **Unread badge**: read/unread tray icon and tooltip, the Windows taskbar overlay (up to `99+`) and the Linux launcher count. While chats are unread and Caprine is not focused, the tray icon and badge blink.
+- **Unread badge**: read/unread tray icon and tooltip, and on Windows the taskbar overlay (up to `99+`). While chats are unread and Caprine is not focused, the tray icon and badge blink.
 - **Tray and window**: close to tray, or quit on close with no tray icon; launch at login, launch minimized, always on top, single instance, remembered window size and position.
 - **Appearance**: system/light/dark/OLED theme, which Caprine's own title bar follows too, code-block and scrollbar styles, your own `custom.css`, text zoom with **Ctrl+=**, **Ctrl+-** and **Ctrl+0**.
 - **Links** open in your default browser, with Facebook `l.php` tracking redirects removed.
