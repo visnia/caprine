@@ -41,7 +41,10 @@ export function createTray(window: BrowserWindow, settings: () => Settings, show
 			tray = new Tray(trayImage(false, trayIconStyle));
 			tray.setContextMenu(Menu.buildFromTemplate([{label: 'Show', click: show}, {label: 'Quit', click: quit}]));
 			tray.on('click', () => {
-				if (window.isVisible() && window.isFocused()) window.hide();
+				// Clicking the Windows notification area activates the taskbar, so
+				// the window has always lost focus by now; there a shown one hides.
+				const active = process.platform === 'win32' ? !window.isMinimized() : window.isFocused();
+				if (window.isVisible() && active) window.hide();
 				else show();
 			});
 		} else if (!showTrayIcon && tray) {
