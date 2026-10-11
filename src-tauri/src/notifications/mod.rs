@@ -1,6 +1,7 @@
 mod native;
 mod policy;
 
+use crate::settings::NotificationSound;
 use std::{
     collections::{HashMap, VecDeque},
     sync::{
@@ -147,6 +148,8 @@ pub struct Delivery {
     pub body: String,
     pub action: Action,
     pub icon: Option<std::path::PathBuf>,
+    /// Present without the platform's notification sound.
+    pub silent: bool,
 }
 
 fn run(app: tauri::AppHandle, receiver: mpsc::Receiver<Event>) {
@@ -217,6 +220,11 @@ fn run(app: tauri::AppHandle, receiver: mpsc::Receiver<Event>) {
                     body,
                     action,
                     icon: None,
+                    silent: app
+                        .state::<crate::settings::SettingsState>()
+                        .get()
+                        .notification_sound
+                        == NotificationSound::Off,
                 };
                 native::show(&app, delivery.clone());
                 delivered.insert(delivery.id, delivery);
@@ -314,6 +322,8 @@ fn run(app: tauri::AppHandle, receiver: mpsc::Receiver<Event>) {
                 },
                 action: Action::Message(thread.map(|v| v.1)),
                 icon,
+                // Only one of Messenger's tone and the platform sound plays.
+                silent: settings.notification_sound != NotificationSound::System,
             };
             native::show(&app, delivery.clone());
             if settings.flash_taskbar && !focused {

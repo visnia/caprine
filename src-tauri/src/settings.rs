@@ -27,6 +27,17 @@ pub enum TrayIconStyle {
     Black,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NotificationSound {
+    /// Messenger's in-page tone; message notifications stay silent.
+    #[default]
+    Messenger,
+    /// The platform's notification sound; Messenger's tone is muted.
+    System,
+    Off,
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Settings {
@@ -42,11 +53,30 @@ pub struct Settings {
     pub debug_notifications: bool,
     pub mute_notifications: bool,
     pub notification_preview: bool,
+    #[serde(deserialize_with = "notification_sound")]
+    pub notification_sound: NotificationSound,
     pub flash_taskbar: bool,
     pub autoplay_videos: bool,
     pub spell_check: bool,
     pub hardware_acceleration: bool,
     pub auto_update: bool,
+}
+
+/// Builds that offered an on/off sound switch saved it as a boolean.
+fn notification_sound<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<NotificationSound, D::Error> {
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum Stored {
+        Choice(NotificationSound),
+        Switch(bool),
+    }
+    Ok(match serde::Deserialize::deserialize(deserializer)? {
+        Stored::Choice(v) => v,
+        Stored::Switch(true) => NotificationSound::Messenger,
+        Stored::Switch(false) => NotificationSound::Off,
+    })
 }
 
 impl Default for Settings {
@@ -64,6 +94,7 @@ impl Default for Settings {
             debug_notifications: false,
             mute_notifications: false,
             notification_preview: true,
+            notification_sound: NotificationSound::Messenger,
             flash_taskbar: true,
             autoplay_videos: true,
             spell_check: true,
@@ -93,6 +124,7 @@ pub enum Update {
     DebugNotifications(bool),
     MuteNotifications(bool),
     NotificationPreview(bool),
+    NotificationSound(NotificationSound),
     FlashTaskbar(bool),
     AutoplayVideos(bool),
     SpellCheck(bool),
@@ -139,6 +171,7 @@ impl Settings {
             Update::DebugNotifications(v) => next.debug_notifications = v,
             Update::MuteNotifications(v) => next.mute_notifications = v,
             Update::NotificationPreview(v) => next.notification_preview = v,
+            Update::NotificationSound(v) => next.notification_sound = v,
             Update::FlashTaskbar(v) => next.flash_taskbar = v,
             Update::AutoplayVideos(v) => next.autoplay_videos = v,
             Update::SpellCheck(v) => next.spell_check = v,
@@ -345,6 +378,31 @@ mod tests {
         let settings = Settings::default().updated(update).unwrap();
         assert_eq!(settings.theme, Theme::Oled);
         assert_eq!(settings.native_theme(), Some(tauri::Theme::Dark));
+    }
+    #[test]
+    fn notification_sound_defaults_to_messenger_and_reads_the_old_switch() {
+        assert_eq!(
+            Settings::default().notification_sound,
+            NotificationSound::Messenger
+        );
+        let update: Update =
+            serde_json::from_str(r#"{"setting":"notificationSound","value":"system"}"#).unwrap();
+        let settings = Settings::default().updated(update).unwrap();
+        assert_eq!(settings.notification_sound, NotificationSound::System);
+        assert!(
+            serde_json::from_str::<Update>(r#"{"setting":"notificationSound","value":true}"#)
+                .is_err()
+        );
+        for (stored, expected) in [
+            ("true", NotificationSound::Messenger),
+            ("false", NotificationSound::Off),
+            (r#""system""#, NotificationSound::System),
+        ] {
+            let json = format!(r#"{{"notificationSound":{stored}}}"#);
+            let settings: Settings = serde_json::from_str(&json).unwrap();
+            assert_eq!(settings.notification_sound, expected);
+        }
+        assert!(serde_json::from_str::<Settings>(r#"{"notificationSound":"loud"}"#).is_err());
     }
     #[test]
     fn tray_icon_style_defaults_to_color_and_updates() {

@@ -69,6 +69,34 @@ test('disabled autoplay blocks unprompted videos but not gestures, calls or audi
 	assert.equal(video.plays, 3);
 });
 
+test('the tone guard refuses unprompted tones but not gestures, calls or videos', async () => {
+	const fake = fakeWindow();
+	const guard = load({}).installToneGuard(fake.window);
+	const tone = new fake.HTMLAudioElement();
+	await tone.play();
+	assert.equal(tone.plays, 1, 'the tone plays by default');
+
+	guard.set(false);
+	await assert.rejects(tone.play(), {name: 'NotAllowedError'});
+	assert.equal(tone.plays, 1);
+	const ring = new fake.HTMLAudioElement();
+	ring.loop = true;
+	await ring.play();
+	assert.equal(ring.plays, 1, 'looping ringtones still play');
+	const video = new fake.HTMLVideoElement();
+	await video.play();
+	assert.equal(video.plays, 1, 'videos are left to the autoplay setting');
+
+	fake.listeners.click({isTrusted: true});
+	await tone.play();
+	assert.equal(tone.plays, 2, 'a voice clip started by a gesture plays');
+	fake.advance(1500);
+	await assert.rejects(tone.play(), {name: 'NotAllowedError'});
+	guard.set(true);
+	await tone.play();
+	assert.equal(tone.plays, 3);
+});
+
 test('spell-check off overrides editable fields and on restores their originals', async () => {
 	const {document, window} = parseHTML('<html><body><div contenteditable="true" spellcheck="true" id="composer"></div><textarea id="plain"></textarea><div contenteditable="false" id="fixed"></div></body></html>');
 	const controller = load({MutationObserver: window.MutationObserver}).createSpellcheckController(document);

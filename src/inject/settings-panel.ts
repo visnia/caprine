@@ -92,7 +92,7 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 		control.addEventListener('click', () => { void run(control, callback); });
 	};
 	const appearance = section('Appearance');
-	type ChoiceKey = 'theme' | 'trayIconStyle';
+	type ChoiceKey = 'theme' | 'trayIconStyle' | 'notificationSound';
 	const select = <K extends ChoiceKey>(parent: HTMLElement, label: string, description: string, setting: K, choices: Array<[Settings[K], string]>) => {
 		const input = element('select', 'caprine-settings-select');
 		input.setAttribute('aria-label', label);
@@ -144,6 +144,7 @@ export function initializeSettingsPanel(client: SettingsClient, version: string,
 	// Stored as muteNotifications, so existing settings files keep their meaning.
 	toggle(notifications, 'Desktop notifications', 'Show a notification and flash the taskbar for new messages while Caprine is not focused.', 'muteNotifications', true);
 	toggle(notifications, 'Message preview', 'Include message text in desktop notifications.', 'notificationPreview');
+	select(notifications, 'Notification sound', 'Play Messenger\'s message tone or the system notification sound. System plays only when a notification is shown.', 'notificationSound', [['messenger', 'Messenger'], ['system', 'System'], ['off', 'Off']]);
 	if (platform === 'windows') toggle(notifications, 'Flash taskbar', 'Flash the taskbar when a message notification arrives.', 'flashTaskbar');
 	const advanced = section('Advanced');
 	toggle(advanced, 'Debug notifications', 'Record notification diagnostics in the app data folder.', 'debugNotifications');

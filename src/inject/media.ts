@@ -1,5 +1,6 @@
-// Video autoplay and spell-check controls. Both act only through standard web
-// APIs: no Messenger selectors, network interception or script modification.
+// Video autoplay, message tone and spell-check controls. All act only through
+// standard web APIs: no Messenger selectors, network interception or script
+// modification.
 
 type MediaWindow = Pick<typeof globalThis, 'HTMLMediaElement' | 'HTMLVideoElement' | 'DOMException' | 'performance'> & {
 	MediaStream?: typeof MediaStream;
@@ -8,16 +9,22 @@ type MediaWindow = Pick<typeof globalThis, 'HTMLMediaElement' | 'HTMLVideoElemen
 	document: Pick<Document, 'addEventListener'>;
 };
 
+// Whether a trusted pointer or key gesture happened within the last second.
+function trackGestures(window: MediaWindow) {
+	let lastGesture = Number.NEGATIVE_INFINITY;
+	for (const type of ['pointerdown', 'keydown', 'click'] as const) {
+		window.addEventListener(type, event => { if (event.isTrusted) lastGesture = window.performance.now(); }, {capture: true});
+	}
+	return () => window.performance.now() - lastGesture < 1000;
+}
+
 // With autoplay off, a video may only start from a recent user gesture.
 // MediaStream videos (calls, camera previews) and audio elements are untouched.
 export function installAutoplayGuard(window: MediaWindow) {
 	if (typeof window.HTMLMediaElement !== 'function') return {set(_: boolean) {}};
 	let allowed = true;
-	let lastGesture = Number.NEGATIVE_INFINITY;
-	for (const type of ['pointerdown', 'keydown', 'click'] as const) {
-		window.addEventListener(type, event => { if (event.isTrusted) lastGesture = window.performance.now(); }, {capture: true});
-	}
-	const activated = () => window.navigator.userActivation?.isActive === true || window.performance.now() - lastGesture < 1000;
+	const recentGesture = trackGestures(window);
+	const activated = () => window.navigator.userActivation?.isActive === true || recentGesture();
 	const blocked = (media: HTMLMediaElement) => !allowed
 		&& media instanceof window.HTMLVideoElement
 		&& !(window.MediaStream && media.srcObject instanceof window.MediaStream)
@@ -34,6 +41,25 @@ export function installAutoplayGuard(window: MediaWindow) {
 		const target = event.target;
 		if (target instanceof window.HTMLMediaElement && blocked(target)) target.pause();
 	}, {capture: true});
+	return {set(value: boolean) { allowed = value; }};
+}
+
+// Unless Messenger's sound is chosen, its message tone (an unprompted,
+// non-looping audio element) is refused. Voice clips start from a gesture and
+// calls ring in a loop, so both still play.
+export function installToneGuard(window: MediaWindow) {
+	if (typeof window.HTMLMediaElement !== 'function') return {set(_: boolean) {}};
+	let allowed = true;
+	const recentGesture = trackGestures(window);
+	const play = window.HTMLMediaElement.prototype.play;
+	window.HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+		if (!allowed && !this.loop && !(this instanceof window.HTMLVideoElement)
+			&& !(window.MediaStream && this.srcObject instanceof window.MediaStream)
+			&& !recentGesture()) {
+			return Promise.reject(new window.DOMException('Messenger sound is not selected in Caprine settings', 'NotAllowedError'));
+		}
+		return Reflect.apply(play, this, []) as Promise<void>;
+	};
 	return {set(value: boolean) { allowed = value; }};
 }
 

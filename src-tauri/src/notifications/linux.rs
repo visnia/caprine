@@ -71,6 +71,9 @@ pub fn show(app: &tauri::AppHandle, delivery: Delivery) {
         if let Some(icon) = &delivery.icon {
             notification.icon(&icon.to_string_lossy());
         }
+        if delivery.silent {
+            notification.hint(notify_rust::Hint::SuppressSound(true));
+        }
         match notification.show_async().await {
             Ok(shown) => {
                 broker::send(

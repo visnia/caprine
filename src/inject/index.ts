@@ -6,7 +6,7 @@ import {createSettingsClient, zoomUpdate, type Settings} from './settings';
 import {initializeSettingsPanel} from './settings-panel';
 import {observeUnread} from './unread';
 import {installCollector, openThread} from './collector';
-import {createSpellcheckController, installAutoplayGuard} from './media';
+import {createSpellcheckController, installAutoplayGuard, installToneGuard} from './media';
 import {observePageKind} from './page';
 
 type Bootstrap = {version: string; platform: 'windows' | 'linux'; customCss: string; customCssError: string | null; settings: Settings; missingDictionaries: string[]};
@@ -14,6 +14,9 @@ type Bootstrap = {version: string; platform: 'windows' | 'linux'; customCss: str
 // Navigation can take this script to another origin. The Rust capability
 // independently enforces IPC; only Messenger's top frame gets our integration.
 if (location.origin === 'https://www.messenger.com' && window === window.top) {
+	// Installed first so the collector's play hook, which wraps it, still hears
+	// a refused message tone.
+	const tone = installToneGuard(window);
 	const collector = installCollector(event => invoke('collect_notification', {event}));
 	// Patched at document start, before Messenger can cache HTMLMediaElement.play.
 	const autoplay = installAutoplayGuard(window);
@@ -32,6 +35,7 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 	};
 	void bootstrap.then(state => {
 		applyDiagnostics(state.settings);
+		tone.set(state.settings.notificationSound === 'messenger');
 	}).catch(error => console.error('[Caprine] Could not initialize notification diagnostics', error));
 	void Promise.all([styled, bootstrap])
 		.then(async ([, state]) => {
@@ -41,6 +45,7 @@ if (location.origin === 'https://www.messenger.com' && window === window.top) {
 			const applySettings = (value: Settings) => {
 				applyTheme(value.theme); applyDiagnostics(value);
 				autoplay.set(value.autoplayVideos); spellcheck.set(value.spellCheck);
+				tone.set(value.notificationSound === 'messenger');
 			};
 			settings.subscribe(applySettings);
 			applySettings(settings.get());

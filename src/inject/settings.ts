@@ -14,6 +14,7 @@ export type Settings = {
 	debugNotifications: boolean;
 	muteNotifications: boolean;
 	notificationPreview: boolean;
+	notificationSound: 'messenger' | 'system' | 'off';
 	flashTaskbar: boolean;
 	autoplayVideos: boolean;
 	spellCheck: boolean;
