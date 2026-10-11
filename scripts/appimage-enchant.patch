@@ -1,0 +1,35 @@
+--- a/src/lib.c
++++ b/src/lib.c
+@@ -38,6 +38,7 @@
+ #include <glib.h>
+ #include <gmodule.h>
+ #include <glib/gstdio.h>
++#include <dlfcn.h>
+ #include <locale.h>
+ 
+ #ifdef _WIN32
+@@ -876,13 +877,20 @@
+ 	g_dir_close (dir);
+ }
+ 
++/* Load providers from the enchant-2 directory next to this library rather
++   than the compiled-in PKGLIBDIR, so a bundled copy finds its own providers
++   wherever the bundle is mounted. */
+ static void
+ enchant_load_providers (EnchantBroker * broker)
+ {
+-	char *module_dir = enchant_relocate (PKGLIBDIR "-" ENCHANT_MAJOR_VERSION);
+-	if (module_dir)
+-		enchant_load_providers_in_dir (broker, module_dir);
+-	free (module_dir);
++	Dl_info info;
++	if (!dladdr ((void *) enchant_load_providers, &info) || !info.dli_fname)
++		return;
++	char *lib_dir = g_path_get_dirname (info.dli_fname);
++	char *module_dir = g_build_filename (lib_dir, "enchant-" ENCHANT_MAJOR_VERSION, NULL);
++	enchant_load_providers_in_dir (broker, module_dir);
++	g_free (module_dir);
++	g_free (lib_dir);
+ }
+ 
+ static void

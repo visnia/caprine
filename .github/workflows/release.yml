@@ -48,13 +48,33 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf file gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf file gstreamer1.0-plugins-base gstreamer1.0-plugins-good libhunspell-dev hunspell-en-us
+      - name: Build enchant for the AppImage
+        if: runner.os == 'Linux'
+        run: |
+          scripts/appimage-enchant.sh "$RUNNER_TEMP/enchant"
+          # linuxdeploy bundles the libenchant WebKitGTK links against.
+          sudo install -m 644 "$RUNNER_TEMP/enchant/libenchant-2.so.2" "$(readlink -f /usr/lib/x86_64-linux-gnu/libenchant-2.so.2)"
+          echo "TAURI_CONFIG={\"bundle\":{\"linux\":{\"appimage\":{\"files\":{\"/usr/lib/enchant-2\":\"$RUNNER_TEMP/enchant/enchant-2\",\"/usr/lib/libhunspell-1.7.so.0\":\"$RUNNER_TEMP/enchant/libhunspell-1.7.so.0\"}}}}}" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm test
       - name: Rust tests
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - name: Build signed bundles
         run: npm run tauri -- build --bundles ${{ matrix.bundles }} -- --locked
+      - name: Check the AppImage's spell checker finds system dictionaries
+        if: runner.os == 'Linux'
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$GITHUB_WORKSPACE"/src-tauri/target/release/bundle/appimage/*.AppImage --appimage-extract > /dev/null
+          LD_LIBRARY_PATH="$PWD/squashfs-root/usr/lib" python3 -I - "$PWD/squashfs-root/usr/lib/libenchant-2.so.2" <<'EOF'
+          import ctypes, sys
+          enchant = ctypes.CDLL(sys.argv[1])
+          enchant.enchant_broker_init.restype = ctypes.c_void_p
+          enchant.enchant_broker_dict_exists.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+          if not enchant.enchant_broker_dict_exists(enchant.enchant_broker_init(), b"en_US"):
+              sys.exit("The bundled enchant does not find the system en_US dictionary.")
+          EOF
       - name: Collect and verify signatures
         run: node scripts/release-artifacts.mjs collect ${{ matrix.platform }}
       - uses: actions/upload-artifact@v7
