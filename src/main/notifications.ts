@@ -19,7 +19,10 @@ export function createNotifier(appIcon: string) {
 		const notification = new Notification({title: notice.title, body: notice.body, icon: notice.icon ?? appIcon, silent: !notice.sound});
 		shown.add(notification);
 		notification.on('click', () => { shown.delete(notification); click(); });
-		notification.on('close', () => shown.delete(notification));
+		// A Windows toast that timed out waits in the Action Center, where it can
+		// still be clicked.
+		notification.on('close', event => { if (event.reason !== 'timedOut') shown.delete(notification); });
+		while (shown.size > 100) shown.delete(shown.values().next().value!);
 		notification.show();
 	};
 	return process.platform === 'linux' ? freedesktop(appIcon, electron) : electron;
