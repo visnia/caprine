@@ -9,7 +9,7 @@ class Variant {
 	constructor(signature, value) { Object.assign(this, {signature, value}); }
 }
 
-async function setup({capabilities = ['body', 'body-markup'], fail = false} = {}) {
+async function setup({capabilities = ['body', 'body-markup'], fail = false, icon = '/app/icons/icon.png'} = {}) {
 	const buses = [];
 	const sent = [];
 	const shown = [];
@@ -42,7 +42,7 @@ async function setup({capabilities = ['body', 'body-markup'], fail = false} = {}
 		BigInt,
 		console: {error() {}},
 	});
-	return {notify: createNotifier('/app/icons/icon.png'), buses, sent, shown};
+	return {notify: createNotifier(icon), buses, sent, shown};
 }
 const hints = args => Object.fromEntries(Object.entries(args[6]).map(([key, variant]) => [key, variant.value]));
 // Values built in the module's context have that context's prototypes.
@@ -58,6 +58,12 @@ test('a sound is named for the server, and a silent notification suppresses one'
 	assert.equal(message[7], -1);
 	assert.deepEqual(plain(hints(message)), {'desktop-entry': 'caprine', urgency: 1, 'sender-pid': '42n', 'sound-name': 'message-new-instant'});
 	assert.deepEqual(plain(hints(download)), {'desktop-entry': 'caprine', urgency: 1, 'sender-pid': '42n', 'suppress-sound': true});
+});
+
+test('the server gets the icon unpacked from app.asar, which it cannot read inside', async () => {
+	const {notify, sent} = await setup({icon: '/tmp/.mount_caprine/resources/app.asar/icons/icon.png'});
+	await notify({title: 'Download complete', body: 'file.zip', sound: null}, () => {});
+	assert.equal(sent[0][2], pathToFileURL('/tmp/.mount_caprine/resources/app.asar.unpacked/icons/icon.png').href);
 });
 
 test('the body is plain text for servers without markup, and avatars are sent as RGBA', async () => {

@@ -57,6 +57,9 @@ function imageData(icon: NativeImage): Variant {
 const escape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 function freedesktop(appIcon: string, fallback: (notice: Notice, click: Click) => void) {
+	// The server opens the icon itself, so it needs a real file: in the
+	// packaged app, the copy unpacked next to app.asar.
+	const icon = pathToFileURL(appIcon.replace('/app.asar/', '/app.asar.unpacked/')).href;
 	const clicks = new Map<number, {click: Click; token?: string}>();
 	let bus: MessageBus | undefined;
 	let server: Promise<{notifications: Notifications; markup: boolean}> | undefined;
@@ -91,7 +94,7 @@ function freedesktop(appIcon: string, fallback: (notice: Notice, click: Click) =
 				...(notice.sound ? {'sound-name': new dbus.Variant('s', notice.sound)} : {'suppress-sound': new dbus.Variant('b', true)}),
 				...(notice.icon ? {'image-data': imageData(notice.icon)} : {}),
 			};
-			const id = await notifications.Notify(app.getName(), 0, pathToFileURL(appIcon).href, notice.title, markup ? escape(notice.body) : notice.body, ['default', 'Open'], hints, -1);
+			const id = await notifications.Notify(app.getName(), 0, icon, notice.title, markup ? escape(notice.body) : notice.body, ['default', 'Open'], hints, -1);
 			clicks.set(id, {click});
 			// Servers that keep notifications without reporting them closed.
 			while (clicks.size > 100) clicks.delete(clicks.keys().next().value!);
