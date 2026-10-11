@@ -1,8 +1,8 @@
 //! Linux window frame: the Wayland app ID, a desktop entry the compositor can
 //! take the window icon from, and KWin's per-window decoration palette.
 
-use std::{cell::RefCell, fs, path::Path, path::PathBuf};
 use gtk::prelude::*;
+use std::{cell::RefCell, fs, path::Path, path::PathBuf};
 use tauri::Manager;
 use wayland_client::{
     backend::{Backend, ObjectId},
@@ -36,15 +36,25 @@ pub fn install_desktop_entry(app: &tauri::AppHandle) -> Result<(), String> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".local/share")))
         .ok_or("No XDG data directory")?;
-    let data_dirs = std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
-    if data_dirs.split(':').any(|dir| Path::new(dir).join("applications").join(&file).exists()) {
+    let data_dirs =
+        std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
+    if data_dirs
+        .split(':')
+        .any(|dir| Path::new(dir).join("applications").join(&file).exists())
+    {
         return Ok(());
     }
     let entry_path = data_home.join("applications").join(&file);
     if let Ok(existing) = fs::read_to_string(&entry_path) {
-        if !existing.lines().any(|line| line == GENERATED) { return Ok(()); }
+        if !existing.lines().any(|line| line == GENERATED) {
+            return Ok(());
+        }
     }
-    let icon = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("icon.png");
+    let icon = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("icon.png");
     if fs::read(&icon).ok().as_deref() != Some(ICON) {
         fs::create_dir_all(icon.parent().unwrap()).map_err(|e| e.to_string())?;
         fs::write(&icon, ICON).map_err(|e| e.to_string())?;
@@ -69,7 +79,10 @@ fn desktop_entry(identifier: &str, exe: &Path, icon: &Path) -> String {
     for c in exe.to_string_lossy().chars() {
         match c {
             '\\' => exec.push_str("\\\\\\\\"),
-            '"' | '`' | '$' => { exec.push_str("\\\\"); exec.push(c); }
+            '"' | '`' | '$' => {
+                exec.push_str("\\\\");
+                exec.push(c);
+            }
             _ => exec.push(c),
         }
     }
@@ -83,7 +96,10 @@ fn desktop_entry(identifier: &str, exe: &Path, icon: &Path) -> String {
 
 /// Messenger's frame behind the panels (--web-wash) and its primary and
 /// secondary text, as KDE color scheme RGB triples.
-fn palette_colors(theme: Theme, dark: bool) -> (&'static str, &'static str, &'static str, &'static str) {
+fn palette_colors(
+    theme: Theme,
+    dark: bool,
+) -> (&'static str, &'static str, &'static str, &'static str) {
     match theme {
         Theme::Oled => ("oled", "0,0,0", "228,230,235", "176,179,184"),
         Theme::Dark => ("dark", "26,26,26", "228,230,235", "176,179,184"),
@@ -112,7 +128,15 @@ struct Frame {
 }
 
 impl Dispatch<WlRegistry, GlobalListContents> for Frame {
-    fn event(_: &mut Self, _: &WlRegistry, _: <WlRegistry as Proxy>::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(
+        _: &mut Self,
+        _: &WlRegistry,
+        _: <WlRegistry as Proxy>::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }
 wayland_client::delegate_noop!(Frame: ignore PaletteManager);
 wayland_client::delegate_noop!(Frame: ignore Palette);
@@ -127,11 +151,18 @@ thread_local! {
 pub fn install_frame(window: &tauri::WebviewWindow) -> Result<(), String> {
     let gtk_window = window.gtk_window().map_err(|e| e.to_string())?;
     let display = gtk_window.display();
-    if display.type_().name() != "GdkWaylandDisplay" { return Ok(()); }
-    let directory = window.app_handle().path().app_local_data_dir().map_err(|e| e.to_string())?;
+    if display.type_().name() != "GdkWaylandDisplay" {
+        return Ok(());
+    }
+    let directory = window
+        .app_handle()
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?;
     // SAFETY: GDK owns the wl_display for the life of the process.
     let connection = unsafe {
-        let display = gdk_wayland_sys::gdk_wayland_display_get_wl_display(display.as_ptr() as *mut _);
+        let display =
+            gdk_wayland_sys::gdk_wayland_display_get_wl_display(display.as_ptr() as *mut _);
         Connection::from_backend(Backend::from_foreign_display(display as *mut _))
     };
     let (globals, queue) = registry_queue_init::<Frame>(&connection).map_err(|e| e.to_string())?;
@@ -139,7 +170,14 @@ pub fn install_frame(window: &tauri::WebviewWindow) -> Result<(), String> {
         return Ok(());
     };
     FRAME.with_borrow_mut(|frame| {
-        *frame = Some(Frame { connection, queue, manager, palette: None, directory, wanted: String::new() });
+        *frame = Some(Frame {
+            connection,
+            queue,
+            manager,
+            palette: None,
+            directory,
+            wanted: String::new(),
+        });
     });
     let mapped = window.clone();
     gtk_window.connect_map(move |_| apply(&mapped));
@@ -159,7 +197,9 @@ pub fn set_theme(window: &tauri::WebviewWindow, theme: Theme) {
             // KWin caches a scheme by path, so each theme has its own file.
             let path = frame.directory.join(&file);
             if fs::read_to_string(&path).ok().as_deref() != Some(scheme.as_str()) {
-                if let Err(error) = fs::create_dir_all(&frame.directory).and_then(|_| fs::write(&path, &scheme)) {
+                if let Err(error) =
+                    fs::create_dir_all(&frame.directory).and_then(|_| fs::write(&path, &scheme))
+                {
                     eprintln!("Could not write the title bar palette: {error}");
                     return false;
                 }
@@ -167,27 +207,49 @@ pub fn set_theme(window: &tauri::WebviewWindow, theme: Theme) {
             frame.wanted = path.to_string_lossy().into_owned();
             true
         });
-        if ready { apply(&applied); }
+        if ready {
+            apply(&applied);
+        }
     });
 }
 
 fn apply(window: &tauri::WebviewWindow) {
-    let Ok(gtk_window) = window.gtk_window() else { return };
-    let Some(gdk_window) = gtk_window.window() else { return };
+    let Ok(gtk_window) = window.gtk_window() else {
+        return;
+    };
+    let Some(gdk_window) = gtk_window.window() else {
+        return;
+    };
     // SAFETY: the window is mapped, so GDK keeps its wl_surface alive.
-    let surface = unsafe { gdk_wayland_sys::gdk_wayland_window_get_wl_surface(gdk_window.as_ptr() as *mut _) };
-    if surface.is_null() { return; }
+    let surface = unsafe {
+        gdk_wayland_sys::gdk_wayland_window_get_wl_surface(gdk_window.as_ptr() as *mut _)
+    };
+    if surface.is_null() {
+        return;
+    }
     FRAME.with_borrow_mut(|frame| {
         let Some(frame) = frame else { return };
-        if frame.wanted.is_empty() { return; }
+        if frame.wanted.is_empty() {
+            return;
+        }
         let palette = match &frame.palette {
             Some((palette, current)) if *current == surface as usize => palette.clone(),
             _ => {
-                if let Some((old, _)) = frame.palette.take() { old.release(); }
+                if let Some((old, _)) = frame.palette.take() {
+                    old.release();
+                }
                 // SAFETY: the pointer is GDK's live wl_surface proxy.
-                let Ok(id) = (unsafe { ObjectId::from_ptr(WlSurface::interface(), surface as *mut _) }) else { return };
-                let Ok(surface_proxy) = WlSurface::from_id(&frame.connection, id) else { return };
-                let palette = frame.manager.create(&surface_proxy, &frame.queue.handle(), ());
+                let Ok(id) =
+                    (unsafe { ObjectId::from_ptr(WlSurface::interface(), surface as *mut _) })
+                else {
+                    return;
+                };
+                let Ok(surface_proxy) = WlSurface::from_id(&frame.connection, id) else {
+                    return;
+                };
+                let palette = frame
+                    .manager
+                    .create(&surface_proxy, &frame.queue.handle(), ());
                 frame.palette = Some((palette.clone(), surface as usize));
                 palette
             }
@@ -205,7 +267,11 @@ mod tests {
 
     #[test]
     fn desktop_entry_quotes_exec() {
-        let entry = desktop_entry("com.visnia.caprine", Path::new("/opt/my $app/caprine"), Path::new("/x/icon.png"));
+        let entry = desktop_entry(
+            "com.visnia.caprine",
+            Path::new("/opt/my $app/caprine"),
+            Path::new("/x/icon.png"),
+        );
         assert!(entry.contains("Exec=\"/opt/my \\\\$app/caprine\"\n"));
         assert!(entry.contains("NoDisplay=true\n"));
         assert!(entry.contains(GENERATED));
