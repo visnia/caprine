@@ -44,6 +44,27 @@ test('downloads cannot escape the folder or overwrite files', () => {
 	}
 });
 
+test('permission checks grant calls and clipboard to Messenger only', () => {
+	const handlers = {};
+	web.configureSession({
+		setPermissionRequestHandler: handler => { handlers.request = handler; },
+		setPermissionCheckHandler: handler => { handlers.check = handler; },
+		setDisplayMediaRequestHandler() {},
+		on() {},
+	}, () => {});
+	// Electron passes the origin as a URL, with a trailing slash.
+	for (const permission of ['media', 'clipboard-sanitized-write']) assert.ok(handlers.check(null, permission, 'https://www.messenger.com/'), permission);
+	assert.ok(!handlers.check(null, 'notifications', 'https://www.messenger.com/'));
+	assert.ok(!handlers.check(null, 'media', 'https://www.messenger.com.evil.test/'));
+	const requested = (permission, requestingUrl) => {
+		let granted;
+		handlers.request(null, permission, value => { granted = value; }, {requestingUrl});
+		return granted;
+	};
+	assert.ok(requested('media', 'https://www.messenger.com/groupcall/1'));
+	assert.ok(!requested('media', 'https://www.fbsbx.com/maw_proxy_page/'));
+});
+
 test('a blank popup sent to an external link opens it in the browser and closes', async () => {
 	const {EventEmitter} = await import('node:events');
 	const opened = [];

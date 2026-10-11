@@ -75,7 +75,8 @@ const allowed = new Set(['media', 'display-capture', 'fullscreen', 'clipboard-sa
 
 export function configureSession(session: Session, downloaded: (file: string | null, name: string) => void) {
 	session.setPermissionRequestHandler((_, permission, callback, details) => callback(allowed.has(permission) && isMessenger(details.requestingUrl)));
-	session.setPermissionCheckHandler((_, permission, origin) => allowed.has(permission) && origin === MESSENGER);
+	// The origin arrives as a URL with a trailing slash.
+	session.setPermissionCheckHandler((_, permission, origin) => allowed.has(permission) && isMessenger(origin));
 	// Screen sharing shares the whole primary screen. On Wayland the desktop
 	// portal shows its own picker.
 	session.setDisplayMediaRequestHandler((request, callback) => {
