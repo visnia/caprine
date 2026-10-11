@@ -1,6 +1,6 @@
 // What Messenger's pages may do: navigation, popups, permissions, downloads
 // and the context menu.
-import {app, clipboard, desktopCapturer, Menu, shell, type MenuItemConstructorOptions, type Session, type WebContents} from 'electron';
+import {app, BrowserWindow, clipboard, desktopCapturer, Menu, shell, type MenuItemConstructorOptions, type Session, type WebContents} from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import {MESSENGER} from '../shared';
@@ -46,6 +46,9 @@ export function guard(contents: WebContents) {
 		if (isMessenger(event.url) || isAuthentication(event.url)) return;
 		event.preventDefault();
 		openExternal(event.url);
+		// A blank popup sent to an external link is not a call.
+		const popup = BrowserWindow.fromWebContents(contents);
+		if (popup?.webContents === contents && ['', 'about:blank'].includes(contents.getURL())) setImmediate(() => popup.close());
 	});
 	contents.on('context-menu', (_, params) => {
 		const items: MenuItemConstructorOptions[] = params.dictionarySuggestions.map(word => ({label: word, click: () => contents.replaceMisspelling(word)}));

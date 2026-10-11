@@ -43,3 +43,32 @@ test('downloads cannot escape the folder or overwrite files', () => {
 		fs.rmSync(directory, {recursive: true});
 	}
 });
+
+test('a blank popup sent to an external link opens it in the browser and closes', async () => {
+	const {EventEmitter} = await import('node:events');
+	const opened = [];
+	const closed = [];
+	const windows = new Map();
+	const {guard} = await load('src/main/web.ts', {
+		electron: {shell: {openExternal: async url => { opened.push(url); }}, BrowserWindow: {fromWebContents: contents => windows.get(contents)}},
+		setImmediate: callback => callback(),
+	});
+	const popup = (url, ownWindow = true) => {
+		const contents = Object.assign(new EventEmitter(), {setWindowOpenHandler() {}, getURL: () => url});
+		windows.set(contents, {webContents: ownWindow ? contents : {}, close: () => closed.push(url)});
+		guard(contents);
+		return contents;
+	};
+	const navigate = (contents, url) => {
+		let prevented = false;
+		contents.emit('will-navigate', {url, preventDefault: () => { prevented = true; }});
+		return prevented;
+	};
+	assert.ok(navigate(popup('about:blank'), 'https://example.com/a'));
+	// A call that loaded Messenger, and Messenger in the main window's view, stay open.
+	assert.ok(navigate(popup('https://www.messenger.com/groupcall/1'), 'https://example.com/b'));
+	assert.ok(navigate(popup('', false), 'https://example.com/c'));
+	assert.ok(!navigate(popup('about:blank'), 'https://www.messenger.com/groupcall/2'));
+	assert.deepEqual(opened, ['https://example.com/a', 'https://example.com/b', 'https://example.com/c']);
+	assert.deepEqual(closed, ['about:blank']);
+});
