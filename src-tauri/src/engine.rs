@@ -12,16 +12,23 @@ impl MissingDictionaries {
         self.0.lock().unwrap().clone()
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg(target_os = "linux")]
     fn set(&self, app: &tauri::AppHandle, missing: Vec<String>) {
-        use tauri::Emitter;
         let mut current = self.0.lock().unwrap();
         if *current == missing {
             return;
         }
-        *current = missing.clone();
+        *current = missing;
         drop(current);
-        let _ = app.emit("missing-dictionaries", missing);
+        // Called from with_webview, which runs inline on the main thread while
+        // tauri-runtime-wry holds the webview's lock; emitting there evaluates
+        // script on the same webview and deadlocks. Emit once it returns.
+        let app = app.clone();
+        webkit2gtk::glib::idle_add_local_once(move || {
+            use tauri::{Emitter, Manager};
+            let missing = app.state::<MissingDictionaries>().get();
+            let _ = app.emit("missing-dictionaries", missing);
+        });
     }
 }
 
