@@ -71,9 +71,15 @@ pub fn show(app: &tauri::AppHandle, delivery: Delivery) {
         if let Some(icon) = &delivery.icon {
             notification.icon(&icon.to_string_lossy());
         }
-        if delivery.silent {
-            notification.hint(notify_rust::Hint::SuppressSound(true));
-        }
+        // Unlike Windows toasts, freedesktop notifications have no default
+        // sound: servers such as Plasma play one only when a hint names it.
+        notification.hint(if delivery.silent {
+            notify_rust::Hint::SuppressSound(true)
+        } else if matches!(delivery.action, broker::Action::Message(_)) {
+            notify_rust::Hint::SoundName("message-new-instant".into())
+        } else {
+            notify_rust::Hint::SoundName("message".into())
+        });
         match notification.show_async().await {
             Ok(shown) => {
                 broker::send(
