@@ -24,6 +24,9 @@ pub struct TrayState {
     parked: AtomicBool,
     /// The off phase of the unread blink: grey tray icon, no taskbar badge.
     dim: AtomicBool,
+    /// The size the window had when park() hid it; see keep_parked_size.
+    #[cfg(target_os = "linux")]
+    parked_size: std::sync::Mutex<Option<tauri::PhysicalSize<u32>>>,
 }
 
 const BLINK: Duration = Duration::from_millis(800);
@@ -136,11 +139,50 @@ pub fn park(app: &tauri::AppHandle) -> Result<(), String> {
         window.set_skip_taskbar(true).map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
-    window.hide().map_err(|e| e.to_string())?;
+    {
+        let size = if window.is_maximized().map_err(|e| e.to_string())? {
+            None
+        } else {
+            Some(window.inner_size().map_err(|e| e.to_string())?)
+        };
+        *app.state::<TrayState>().parked_size.lock().unwrap() = size;
+        window.hide().map_err(|e| e.to_string())?;
+    }
     app.state::<TrayState>()
         .parked
         .store(true, Ordering::Relaxed);
     crate::notifications::log_runtime(app);
+    Ok(())
+}
+
+/// GTK maps a hidden window again at the size the app last requested, not at
+/// one the user resized it to, and its first configure after the map
+/// overrides earlier requests, so the size park() recorded follows that.
+#[cfg(target_os = "linux")]
+pub fn keep_parked_size(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    use gtk::prelude::*;
+    let mapped = window.clone();
+    window
+        .gtk_window()?
+        .connect_configure_event(move |gtk_window, _| {
+            if gtk_window.is_mapped() {
+                let parked = mapped
+                    .state::<TrayState>()
+                    .parked_size
+                    .lock()
+                    .unwrap()
+                    .take();
+                if let Some(size) = parked {
+                    let window = mapped.clone();
+                    gtk::glib::idle_add_local_once(move || {
+                        if let Err(error) = window.set_size(size) {
+                            eprintln!("Could not restore the window size: {error}");
+                        }
+                    });
+                }
+            }
+            false
+        });
     Ok(())
 }
 

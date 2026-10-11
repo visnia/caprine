@@ -293,6 +293,8 @@ fn main() {
             if let Err(error) = linux::install_frame(&window) { eprintln!("Could not style the title bar: {error}"); }
             settings::apply_title_bar(&window, settings.theme);
             tray::install(app.handle())?;
+            #[cfg(target_os = "linux")]
+            tray::keep_parked_size(&window)?;
             tray::refresh(app.handle())?;
             tray::start_blinking(app.handle());
             engine::install(&window, &settings)?;
