@@ -14,6 +14,22 @@ test('initialization is inert on other origins and child frames', () => {
 	vm.runInNewContext(script, {location: {origin: 'https://www.messenger.com'}, window: {top: {}}});
 });
 
+test('the all-frames script only touches Messenger and its sandbox frame', async () => {
+	const frames = await readFile(new URL('../dist/frames.js', import.meta.url), 'utf8');
+	for (const origin of ['https://www.facebook.com', 'https://www.fbsbx.com.evil.test', 'http://www.fbsbx.com', 'tauri://localhost']) {
+		const AudioContext = class {};
+		const window = {AudioContext};
+		vm.runInNewContext(frames, {location: {origin}, window});
+		assert.equal(window.AudioContext, AudioContext, origin);
+	}
+	for (const origin of ['https://www.messenger.com', 'https://www.fbsbx.com']) {
+		const AudioContext = class {};
+		const window = {AudioContext};
+		vm.runInNewContext(frames, {location: {origin}, window});
+		assert.notEqual(window.AudioContext, AudioContext, origin);
+	}
+});
+
 test('startup inventory reaches the narrow IPC command before DOM readiness', async () => {
 	const calls = [];
 	const intervals = [];

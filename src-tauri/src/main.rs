@@ -255,6 +255,7 @@ fn main() {
                 .disable_drag_drop_handler()
                 .zoom_hotkeys_enabled(false)
                 .initialization_script(include_str!("../../dist/inject.js"))
+                .initialization_script_for_all_frames(include_str!("../../dist/frames.js"))
                 .on_permission_request(|webview, kind| calls::permission(&webview, kind))
                 .on_page_load(|window, payload| {
                     if payload.event() == tauri::webview::PageLoadEvent::Finished { offline::page_loaded(&window, payload.url()); }

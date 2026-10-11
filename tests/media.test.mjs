@@ -119,3 +119,85 @@ test('spell-check off overrides editable fields and on restores their originals'
 	assert.equal(document.getElementById('plain').hasAttribute('spellcheck'), false);
 	assert.equal(added.hasAttribute('spellcheck'), false);
 });
+
+function fakeAudio() {
+	class Target {
+		constructor() { this.listeners = {}; }
+		addEventListener(type, listener) { (this.listeners[type] ??= []).push(listener); }
+		emit(type) { for (const listener of this.listeners[type] ?? []) listener(); }
+	}
+	class AudioContext {
+		constructor() { this.state = 'running'; this.calls = []; }
+		suspend() { this.calls.push('suspend'); this.state = 'suspended'; return Promise.resolve(); }
+		resume() { this.calls.push('resume'); this.state = 'running'; return Promise.resolve(); }
+		createMediaElementSource() { return {}; }
+		createMediaStreamSource() { return {}; }
+	}
+	class AudioScheduledSourceNode extends Target {
+		constructor(context) { super(); this.context = context; }
+		start() {}
+	}
+	const timers = new Map();
+	let next = 0;
+	const window = {
+		AudioContext, AudioScheduledSourceNode,
+		setTimeout: handler => { timers.set(++next, handler); return next; },
+		clearTimeout: id => timers.delete(id),
+	};
+	const elapse = () => { const pending = [...timers.values()]; timers.clear(); for (const handler of pending) handler(); };
+	return {window, Target, AudioScheduledSourceNode, elapse};
+}
+
+test('idle audio contexts are suspended and resumed when a sound starts', async () => {
+	const fake = fakeAudio();
+	load({}).installAudioIdleGuard(fake.window);
+	const context = new fake.window.AudioContext();
+	assert.ok(context instanceof fake.window.AudioContext);
+	assert.deepEqual(context.calls, ['suspend'], 'a new context is suspended at once');
+
+	const tone = new fake.AudioScheduledSourceNode(context);
+	tone.start();
+	assert.deepEqual(context.calls, ['suspend', 'resume']);
+	fake.elapse();
+	assert.equal(context.calls.length, 2, 'not suspended while the tone plays');
+	tone.emit('ended');
+	fake.elapse();
+	assert.deepEqual(context.calls, ['suspend', 'resume', 'suspend']);
+
+	const element = new fake.Target();
+	element.paused = true;
+	context.createMediaElementSource(element);
+	element.emit('play');
+	fake.elapse();
+	assert.equal(context.calls.at(-1), 'resume', 'a playing media element keeps it awake');
+	element.emit('pause');
+	fake.elapse();
+	assert.equal(context.calls.at(-1), 'suspend');
+
+	const track = new fake.Target();
+	track.readyState = 'live';
+	const stream = new fake.Target();
+	stream.getAudioTracks = () => [track];
+	context.createMediaStreamSource(stream);
+	fake.elapse();
+	assert.equal(context.calls.at(-1), 'resume', 'a live call stream keeps it awake');
+	track.readyState = 'ended';
+	track.emit('ended');
+	fake.elapse();
+	assert.equal(context.calls.at(-1), 'suspend');
+});
+
+test('a context the page suspends is not resumed by the idle guard', async () => {
+	const fake = fakeAudio();
+	load({}).installAudioIdleGuard(fake.window);
+	const context = new fake.window.AudioContext();
+	await context.suspend();
+	const tone = new fake.AudioScheduledSourceNode(context);
+	tone.start();
+	fake.elapse();
+	assert.deepEqual(context.calls, ['suspend', 'suspend'], 'the guard\'s suspend, then the page\'s');
+	await context.resume();
+	tone.emit('ended');
+	fake.elapse();
+	assert.deepEqual(context.calls, ['suspend', 'suspend', 'resume', 'suspend'], 'resumed by the page, then idled again');
+});
