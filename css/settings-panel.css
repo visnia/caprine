@@ -208,6 +208,11 @@ html[data-caprine-page='login'] .caprine-settings-launcher {
 	width: 10px;
 }
 
+.caprine-settings-content::-webkit-scrollbar-track,
+.caprine-settings-content::-webkit-scrollbar-track:hover {
+	box-shadow: none;
+}
+
 .caprine-settings-content::-webkit-scrollbar-thumb {
 	border: 3px solid transparent;
 	border-radius: 8px;

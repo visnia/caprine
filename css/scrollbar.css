@@ -25,9 +25,17 @@ html.dark-mode ::-webkit-scrollbar-thumb {
 	border-radius: 8px;
 	border: solid 4px transparent;
 }
+/* The track is opaque like the light one: a scroller's own background extends
+   under it, so a transparent track showed chat themes' gradients as a bar. */
+html.dark-mode {
+	--caprine-scrollbar-track: #1f1f1f;
+}
+html.dark-mode.oled-mode {
+	--caprine-scrollbar-track: #0f0f0f;
+}
 html.dark-mode ::-webkit-scrollbar-track {
-	box-shadow: inset 0 0 16px 16px #0000;
+	box-shadow: inset 0 0 16px 16px var(--caprine-scrollbar-track);
 }
 html.dark-mode ::-webkit-scrollbar-track:hover {
-	box-shadow: inset 0 0 16px 16px #ffffff10;
+	box-shadow: inset 0 0 16px 16px #ffffff10, inset 0 0 16px 16px var(--caprine-scrollbar-track);
 }
