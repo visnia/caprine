@@ -2,13 +2,17 @@
 //! take the window icon from, and KWin's per-window decoration palette.
 
 use gtk::prelude::*;
-use std::{cell::RefCell, fs, path::Path, path::PathBuf};
+use std::{cell::Cell, cell::OnceCell, cell::RefCell, fs, path::Path, path::PathBuf};
 use tauri::Manager;
 use wayland_client::{
     backend::{Backend, ObjectId},
     globals::{registry_queue_init, GlobalListContents},
     protocol::{wl_registry::WlRegistry, wl_surface::WlSurface},
     Connection, Dispatch, EventQueue, Proxy, QueueHandle,
+};
+use wayland_protocols_plasma::server_decoration::client::{
+    org_kde_kwin_server_decoration::{Mode, OrgKdeKwinServerDecoration as Decoration},
+    org_kde_kwin_server_decoration_manager::OrgKdeKwinServerDecorationManager as DecorationManager,
 };
 use wayland_protocols_plasma::server_decoration_palette::client::{
     org_kde_kwin_server_decoration_palette::OrgKdeKwinServerDecorationPalette as Palette,
@@ -120,9 +124,11 @@ struct Frame {
     connection: Connection,
     queue: EventQueue<Frame>,
     manager: PaletteManager,
-    /// The palette and the wl_surface it decorates; GTK replaces the
-    /// surface whenever the window is hidden to the tray and shown again.
-    palette: Option<(Palette, usize)>,
+    decorations: Option<DecorationManager>,
+    /// The palette, a handle on the decoration once it has been rebuilt, and
+    /// the wl_surface they belong to; GTK replaces the surface whenever the
+    /// window is hidden to the tray and shown again.
+    palette: Option<(Palette, Option<Decoration>, WlSurface)>,
     directory: PathBuf,
     wanted: String,
 }
@@ -140,9 +146,17 @@ impl Dispatch<WlRegistry, GlobalListContents> for Frame {
 }
 wayland_client::delegate_noop!(Frame: ignore PaletteManager);
 wayland_client::delegate_noop!(Frame: ignore Palette);
+wayland_client::delegate_noop!(Frame: ignore DecorationManager);
+wayland_client::delegate_noop!(Frame: ignore Decoration);
 
 thread_local! {
     static FRAME: RefCell<Option<Frame>> = const { RefCell::new(None) };
+    /// Whether Messenger should see a dark preferred color scheme.
+    static WEB_DARK: Cell<Option<bool>> = const { Cell::new(None) };
+    /// The window and theme last applied, so System can follow the desktop.
+    static THEME: RefCell<Option<(tauri::WebviewWindow, Theme)>> = const { RefCell::new(None) };
+    /// The session's GTK theme, restored when Light no longer swaps it.
+    static SESSION_THEME: OnceCell<Option<String>> = const { OnceCell::new() };
 }
 
 /// Binds KWin's decoration palette on GDK's Wayland connection and repaints
@@ -169,31 +183,39 @@ pub fn install_frame(window: &tauri::WebviewWindow) -> Result<(), String> {
     let Ok(manager) = globals.bind::<PaletteManager, _, _>(&queue.handle(), 1..=1, ()) else {
         return Ok(());
     };
+    let decorations = globals
+        .bind::<DecorationManager, _, _>(&queue.handle(), 1..=1, ())
+        .ok();
     FRAME.with_borrow_mut(|frame| {
         *frame = Some(Frame {
             connection,
             queue,
             manager,
+            decorations,
             palette: None,
             directory,
             wanted: String::new(),
         });
     });
     let mapped = window.clone();
-    gtk_window.connect_map(move |_| apply(&mapped));
+    // A mapped window gets a new decoration, which reads the palette.
+    gtk_window.connect_map(move |_| apply(&mapped, false));
     Ok(())
 }
 
 /// Chooses the palette for the theme and applies it on the GTK thread.
 pub fn set_theme(window: &tauri::WebviewWindow, theme: Theme) {
-    let dark = window.theme().is_ok_and(|t| t == tauri::Theme::Dark);
+    let dark = system_is_dark(window);
     let (name, background, foreground, inactive) = palette_colors(theme, dark);
     let applied = window.clone();
     let scheme = color_scheme(name, background, foreground, inactive);
     let file = format!("decoration-{name}.colors");
+    let web_dark = name != "light";
     let _ = window.run_on_main_thread(move || {
+        THEME.set(Some((applied.clone(), theme)));
+        set_web_scheme(web_dark);
         let ready = FRAME.with_borrow_mut(|frame| {
-            let Some(frame) = frame else { return false };
+            let Some(frame) = frame else { return None };
             // KWin caches a scheme by path, so each theme has its own file.
             let path = frame.directory.join(&file);
             if fs::read_to_string(&path).ok().as_deref() != Some(scheme.as_str()) {
@@ -201,19 +223,68 @@ pub fn set_theme(window: &tauri::WebviewWindow, theme: Theme) {
                     fs::create_dir_all(&frame.directory).and_then(|_| fs::write(&path, &scheme))
                 {
                     eprintln!("Could not write the title bar palette: {error}");
-                    return false;
+                    return None;
                 }
             }
-            frame.wanted = path.to_string_lossy().into_owned();
-            true
+            let wanted = path.to_string_lossy().into_owned();
+            let changed = frame.wanted != wanted;
+            frame.wanted = wanted;
+            Some(changed)
         });
-        if ready {
-            apply(&applied);
+        if let Some(changed) = ready {
+            apply(&applied, changed);
         }
     });
 }
 
-fn apply(window: &tauri::WebviewWindow) {
+/// Tao reads the portal's color scheme while no theme is forced.
+fn system_is_dark(window: &tauri::WebviewWindow) -> bool {
+    window.theme().is_ok_and(|t| t == tauri::Theme::Dark)
+}
+
+/// WebKitGTK reports a dark preferred color scheme when GTK prefers a dark
+/// theme or the theme name ends in -dark, and tao only sets the former, so
+/// Messenger stayed dark under Light with a dark GTK theme. Light swaps in
+/// Adwaita instead. Tao also resets the preference on its own theme updates,
+/// so it is held here until the next set_theme. When the desktop scheme
+/// changes tao rewrites it too, but its ThemeChanged event carries a dummy
+/// window ID and never reaches the window, so System reapplies from here.
+fn set_web_scheme(dark: bool) {
+    let Some(settings) = gtk::Settings::default() else {
+        return;
+    };
+    if WEB_DARK.replace(Some(dark)).is_none() {
+        SESSION_THEME.with(|theme| theme.set(settings.gtk_theme_name().map(Into::into)).ok());
+        settings.connect_gtk_application_prefer_dark_theme_notify(|settings| {
+            let Some((window, theme)) = THEME.with_borrow(Clone::clone) else {
+                return;
+            };
+            if theme == Theme::System && WEB_DARK.get() != Some(system_is_dark(&window)) {
+                set_theme(&window, theme);
+            } else if let Some(dark) = WEB_DARK.get() {
+                if settings.is_gtk_application_prefer_dark_theme() != dark {
+                    settings.set_gtk_application_prefer_dark_theme(dark);
+                }
+            }
+        });
+    }
+    if settings.is_gtk_application_prefer_dark_theme() != dark {
+        settings.set_gtk_application_prefer_dark_theme(dark);
+    }
+    let theme = SESSION_THEME.with(|theme| theme.get().cloned().flatten());
+    let theme = match theme {
+        Some(name) if !dark && name.to_lowercase().contains("dark") => Some("Adwaita".into()),
+        other => other,
+    };
+    if settings.gtk_theme_name().as_deref() != theme.as_deref() {
+        settings.set_gtk_theme_name(theme.as_deref());
+    }
+}
+
+/// Sends the wanted palette to the window's decoration. Breeze paints the
+/// window outline only when the decoration is created or the window changes
+/// state, so `rebuild` has KWin drop the decoration and create it again.
+fn apply(window: &tauri::WebviewWindow, rebuild: bool) {
     let Ok(gtk_window) = window.gtk_window() else {
         return;
     };
@@ -232,32 +303,52 @@ fn apply(window: &tauri::WebviewWindow) {
         if frame.wanted.is_empty() {
             return;
         }
-        let palette = match &frame.palette {
-            Some((palette, current)) if *current == surface as usize => palette.clone(),
-            _ => {
-                if let Some((old, _)) = frame.palette.take() {
-                    old.release();
+        if frame
+            .palette
+            .as_ref()
+            .is_none_or(|(_, _, current)| current.id().as_ptr() != surface as *mut _)
+        {
+            if let Some((old, decoration, _)) = frame.palette.take() {
+                old.release();
+                if let Some(decoration) = decoration {
+                    decoration.release();
                 }
-                // SAFETY: the pointer is GDK's live wl_surface proxy.
-                let Ok(id) =
-                    (unsafe { ObjectId::from_ptr(WlSurface::interface(), surface as *mut _) })
-                else {
-                    return;
-                };
-                let Ok(surface_proxy) = WlSurface::from_id(&frame.connection, id) else {
-                    return;
-                };
-                let palette = frame
-                    .manager
-                    .create(&surface_proxy, &frame.queue.handle(), ());
-                frame.palette = Some((palette.clone(), surface as usize));
-                palette
             }
+            // SAFETY: the pointer is GDK's live wl_surface proxy.
+            let Ok(id) = (unsafe { ObjectId::from_ptr(WlSurface::interface(), surface as *mut _) })
+            else {
+                return;
+            };
+            let Ok(surface) = WlSurface::from_id(&frame.connection, id) else {
+                return;
+            };
+            let palette = frame.manager.create(&surface, &frame.queue.handle(), ());
+            frame.palette = Some((palette, None, surface));
+        }
+        let Some((palette, decoration, surface)) = &mut frame.palette else {
+            return;
         };
         palette.set_palette(frame.wanted.clone());
         if let Err(error) = frame.connection.flush() {
             eprintln!("Could not send the title bar palette: {error}");
         }
+        let (true, Some(manager)) = (rebuild, &frame.decorations) else {
+            return;
+        };
+        let decoration = decoration
+            .get_or_insert_with(|| manager.create(surface, &frame.queue.handle(), ()))
+            .clone();
+        decoration.request_mode(Mode::None as u32);
+        if let Err(error) = frame.connection.flush() {
+            eprintln!("Could not rebuild the title bar: {error}");
+        }
+        let connection = frame.connection.clone();
+        gtk::glib::idle_add_local_once(move || {
+            decoration.request_mode(Mode::Server as u32);
+            if let Err(error) = connection.flush() {
+                eprintln!("Could not rebuild the title bar: {error}");
+            }
+        });
     });
 }
 

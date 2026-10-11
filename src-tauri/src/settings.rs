@@ -250,6 +250,7 @@ pub fn apply_title_bar(window: &tauri::WebviewWindow, theme: Theme) {
 
 /// Paints KWin's server-side decoration the same way through its per-window
 /// palette; Light gets a white palette since the system scheme may be dark.
+/// It also keeps WebKitGTK's preferred color scheme on the chosen theme.
 #[cfg(target_os = "linux")]
 pub fn apply_title_bar(window: &tauri::WebviewWindow, theme: Theme) {
     crate::linux::set_theme(window, theme);

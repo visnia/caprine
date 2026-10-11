@@ -276,6 +276,10 @@ fn main() {
                 });
             let window = builder.build()?;
             window.set_zoom(settings.zoom_factor)?;
+            // Tao seeds the theme with the portal's scheme at startup, so System
+            // would keep reporting it; setting it again lets theme() follow.
+            #[cfg(target_os = "linux")]
+            window.set_theme(settings.native_theme())?;
             #[cfg(target_os = "linux")]
             if let Err(error) = linux::install_frame(&window) { eprintln!("Could not style the title bar: {error}"); }
             settings::apply_title_bar(&window, settings.theme);
