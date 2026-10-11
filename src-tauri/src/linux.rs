@@ -31,6 +31,55 @@ pub fn set_app_id(identifier: &str) {
     gtk::glib::set_prgname(Some(identifier));
 }
 
+/// GStreamer keys its plugin cache to each plugin's path, and the AppImage
+/// mounts at a new /tmp/.mount_* path on every launch, so each start rescanned
+/// the bundled plugins (~0.7 s) and overwrote the system GStreamer's cache. A
+/// fixed symlink to the mount keeps the paths, and so the cache, valid. While
+/// another instance still runs (a hand-off or an update restart) its symlink
+/// stays and this one takes the next slot. Must run before any thread starts.
+pub fn stabilize_gstreamer_cache(identifier: &str) {
+    let (Some(appdir), Some(runtime)) = (
+        std::env::var_os("APPDIR"),
+        std::env::var_os("XDG_RUNTIME_DIR"),
+    ) else {
+        return;
+    };
+    let plugins = Path::new(&appdir).join("usr/lib/gstreamer-1.0");
+    let Some(cache) = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".cache")))
+    else {
+        return;
+    };
+    let cache = cache.join(identifier);
+    if !plugins.is_dir() || fs::create_dir_all(&cache).is_err() {
+        return;
+    }
+    for slot in 0..4 {
+        let link = Path::new(&runtime).join(format!("{identifier}-gstreamer-{slot}"));
+        // A live target is another running instance's mount.
+        if fs::read_link(&link).is_ok_and(|target| target != plugins && target.exists()) {
+            continue;
+        }
+        let staging = link.with_extension(std::process::id().to_string());
+        let _ = fs::remove_file(&staging);
+        if std::os::unix::fs::symlink(&plugins, &staging)
+            .and_then(|()| fs::rename(&staging, &link))
+            .is_err()
+        {
+            let _ = fs::remove_file(&staging);
+            return;
+        }
+        std::env::set_var("GST_PLUGIN_SYSTEM_PATH_1_0", &link);
+        std::env::set_var("GST_PLUGIN_PATH_1_0", &link);
+        std::env::set_var(
+            "GST_REGISTRY_1_0",
+            cache.join(format!("gstreamer-registry-{slot}.bin")),
+        );
+        return;
+    }
+}
+
 /// Writes a hidden desktop entry named after the app ID unless a package
 /// already installed one. Without it KWin shows the generic Wayland icon.
 pub fn install_desktop_entry(app: &tauri::AppHandle) -> Result<(), String> {

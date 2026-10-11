@@ -213,6 +213,8 @@ fn main() {
         );
     }
     #[cfg(target_os = "linux")]
+    linux::stabilize_gstreamer_cache(&context.config().identifier);
+    #[cfg(target_os = "linux")]
     linux::set_app_id(&context.config().identifier);
     let autostart_name = context.config().identifier.clone();
     tauri::Builder::default()
