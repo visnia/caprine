@@ -32,6 +32,11 @@ function trayImage(lit: boolean, style: Settings['trayIconStyle']): NativeImage 
 }
 
 export function createTray(window: BrowserWindow, settings: () => Settings, show: () => void, quit: () => void) {
+	// Clicking the Windows notification area activates the taskbar, so the
+	// window loses focus before the click arrives; one that lost it that
+	// recently still counts as focused.
+	let blurredAt = -Infinity;
+	window.on('blur', () => { blurredAt = Date.now(); });
 	const render = () => {
 		const {quitOnWindowClose, showUnreadBadge, trayIconStyle} = settings();
 		// The tray is how a closed window comes back, so it shows only then.
@@ -41,10 +46,8 @@ export function createTray(window: BrowserWindow, settings: () => Settings, show
 			tray = new Tray(trayImage(false, trayIconStyle));
 			tray.setContextMenu(Menu.buildFromTemplate([{label: 'Show', click: show}, {label: 'Quit', click: quit}]));
 			tray.on('click', () => {
-				// Clicking the Windows notification area activates the taskbar, so
-				// the window has always lost focus by now; there a shown one hides.
-				const active = process.platform === 'win32' ? !window.isMinimized() : window.isFocused();
-				if (window.isVisible() && active) window.hide();
+				const focused = window.isFocused() || Date.now() - blurredAt < 500;
+				if (window.isVisible() && focused) window.hide();
 				else show();
 			});
 		} else if (!showTrayIcon && tray) {

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {load} from './load.mjs';
 
 async function setup(platform) {
+	const clock = {now: 0};
 	const trays = [];
 	class Tray extends EventEmitter {
 		constructor() { super(); trays.push(this); }
@@ -23,24 +24,37 @@ async function setup(platform) {
 		},
 		process: {platform},
 		Buffer,
+		Date: {now: () => clock.now},
 		setInterval() {},
 	});
 	const state = {visible: true, focused: false, minimized: false};
 	const calls = [];
-	const window = {isVisible: () => state.visible, isFocused: () => state.focused, isMinimized: () => state.minimized, isDestroyed: () => false, hide: () => calls.push('hide'), setOverlayIcon() {}};
+	const window = new EventEmitter();
+	Object.assign(window, {isVisible: () => state.visible, isFocused: () => state.focused, isMinimized: () => state.minimized, isDestroyed: () => false, hide: () => calls.push('hide'), setOverlayIcon() {}});
 	createTray(window, () => ({quitOnWindowClose: false, showUnreadBadge: true, trayIconStyle: 'color'}), () => calls.push('show'), () => {});
-	return {click: () => trays[0].emit('click'), state, calls};
+	const blur = () => { state.focused = false; window.emit('blur'); };
+	return {click: () => trays[0].emit('click'), blur, clock, state, calls};
 }
 
-test('on Windows a tray click hides a shown window, though the click took its focus', async () => {
-	const {click, state, calls} = await setup('win32');
+test('on Windows a tray click hides a focused window, though the click took its focus', async () => {
+	const {click, blur, clock, state, calls} = await setup('win32');
+	state.focused = true;
+	clock.now = 1000;
+	blur();
+	clock.now = 1150;
+	click();
+	assert.deepEqual(calls, ['hide']);
+});
+
+test('on Windows a tray click raises a window behind others or minimized', async () => {
+	const {click, blur, clock, state, calls} = await setup('win32');
+	clock.now = 1000;
+	blur();
+	clock.now = 5000;
 	click();
 	state.minimized = true;
 	click();
-	state.visible = false;
-	state.minimized = false;
-	click();
-	assert.deepEqual(calls, ['hide', 'show', 'show']);
+	assert.deepEqual(calls, ['show', 'show']);
 });
 
 test('on Linux a tray click hides a focused window and raises one behind others', async () => {
