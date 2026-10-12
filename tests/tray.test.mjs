@@ -57,12 +57,12 @@ test('on Windows a tray click raises a window behind others or minimized', async
 	assert.deepEqual(calls, ['show', 'show']);
 });
 
-test('on Linux a tray click hides a focused window and raises one behind others', async () => {
+test('on Linux a tray click hides a focused window and maps one behind others again', async () => {
 	const {click, state, calls} = await setup('linux');
 	click();
 	state.focused = true;
 	click();
 	state.visible = false;
 	click();
-	assert.deepEqual(calls, ['show', 'hide', 'show']);
+	assert.deepEqual(calls, ['hide', 'show', 'hide', 'show']);
 });

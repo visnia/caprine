@@ -48,7 +48,13 @@ export function createTray(window: BrowserWindow, settings: () => Settings, show
 			tray.on('click', () => {
 				const focused = window.isFocused() || Date.now() - blurredAt < 500;
 				if (window.isVisible() && focused) window.hide();
-				else show();
+				else {
+					// Plasma passes the click's activation token only to tray icons
+					// that ask for it, which Electron's do not, and without one KWin
+					// will not raise a window; it does focus one that is mapped again.
+					if (process.platform === 'linux' && window.isVisible()) window.hide();
+					show();
+				}
 			});
 		} else if (!showTrayIcon && tray) {
 			tray.destroy();
