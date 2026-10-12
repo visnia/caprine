@@ -56,12 +56,20 @@ svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.3}
 [data-maximized] .restore{display:inline}
 </style><div id="title"></div>${nativeButtons ? '' : buttons}`;
 
+// Themes with their own window frame colour, matching Messenger's --web-wash
+// under them: [background, foreground].
+const frames: Partial<Record<Settings['theme'], [string, string]>> = {
+	oled: ['#000000', '#e4e6eb'],
+	latte: ['#e6e9ef', '#4c4f69'],
+	mocha: ['#181825', '#cdd6f4'],
+};
+
 export function installTitleBar(window: BrowserWindow, theme: () => Settings['theme']) {
 	void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page())}`);
 	const paint = () => {
 		if (window.isDestroyed()) return;
-		const [background, foreground] = theme() === 'oled' ? ['#000000', '#e4e6eb']
-			: nativeTheme.shouldUseDarkColors ? ['#1a1a1a', '#e4e6eb'] : ['#ffffff', '#050505'];
+		const [background, foreground] = frames[theme()]
+			?? (nativeTheme.shouldUseDarkColors ? ['#1a1a1a', '#e4e6eb'] : ['#ffffff', '#050505']);
 		window.setBackgroundColor(background);
 		if (nativeButtons) window.setTitleBarOverlay({color: background, symbolColor: foreground, height: titleBarHeight});
 		const state = {background, foreground, title: window.getTitle(), maximized: window.isMaximized(), inactive: !window.isFocused()};

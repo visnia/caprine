@@ -55,6 +55,31 @@
 	--caprine-border: #2a2a2b;
 }
 
+/* Catppuccin: the palette comes from css/catppuccin.css on <html>. */
+.caprine-settings-launcher[data-caprine-theme='latte'],
+.caprine-settings-backdrop[data-caprine-theme='latte'],
+.caprine-settings-launcher[data-caprine-theme='mocha'],
+.caprine-settings-backdrop[data-caprine-theme='mocha'] {
+	--caprine-accent: var(--ctp-accent);
+	--caprine-panel: var(--ctp-base);
+	--caprine-surface: var(--ctp-surface0);
+	--caprine-surface-hover: var(--ctp-surface1);
+	--caprine-border: var(--ctp-surface0);
+	--caprine-text: var(--ctp-text);
+	--caprine-secondary-text: var(--ctp-subtext0);
+	--caprine-danger: var(--ctp-red);
+}
+
+.caprine-settings-launcher[data-caprine-theme='latte'],
+.caprine-settings-backdrop[data-caprine-theme='latte'] {
+	--caprine-shadow: 0 12px 36px rgb(0 0 0 / 18%);
+}
+
+.caprine-settings-launcher[data-caprine-theme='mocha'],
+.caprine-settings-backdrop[data-caprine-theme='mocha'] {
+	--caprine-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+}
+
 html.caprine-settings-open {
 	overflow: hidden;
 }
@@ -99,7 +124,7 @@ html[data-caprine-page='login'] .caprine-settings-launcher {
 .caprine-settings-panel button:focus-visible,
 .caprine-settings-panel select:focus-visible,
 .caprine-settings-panel input:focus-visible + span {
-	outline: 3px solid rgb(8 102 255 / 35%);
+	outline: 3px solid color-mix(in srgb, var(--caprine-accent) 35%, transparent);
 	outline-offset: 2px;
 }
 
@@ -338,7 +363,7 @@ html[data-caprine-page='login'] .caprine-settings-launcher {
 }
 
 .caprine-settings-select {
-	max-width: 150px;
+	max-width: 170px;
 	padding: 8px 28px 8px 10px;
 	cursor: pointer;
 }

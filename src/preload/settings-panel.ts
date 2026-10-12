@@ -114,7 +114,7 @@ export function initializeSettingsPanel(host: PanelHost) {
 	};
 
 	const appearance = section('Appearance');
-	select(appearance, 'Theme', 'Follow the system or choose a light, dark or OLED theme.', 'theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark'], ['oled', 'OLED']]);
+	select(appearance, 'Theme', 'Follow the system or choose a light, dark, OLED or Catppuccin theme.', 'theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark'], ['oled', 'OLED'], ['latte', 'Catppuccin Latte'], ['mocha', 'Catppuccin Mocha']]);
 	select(appearance, 'Tray icon style', 'Use the Messenger logo or a monochrome outline that matches the panel. The tray icon shows while Quit on window close is off.', 'trayIconStyle', [['color', 'Color'], ['white', 'White outline'], ['black', 'Black outline']]);
 	const stepper = element('div', 'caprine-settings-stepper');
 	const decrease = button('−');

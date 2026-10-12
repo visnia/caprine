@@ -27,3 +27,10 @@ test('the removed tray icon switch is ignored and cannot be set', () => {
 	assert.throws(() => changed(defaults, 'showTrayIcon', false), /Invalid value/);
 	assert.equal(changed(defaults, 'quitOnWindowClose', true).quitOnWindowClose, true);
 });
+
+test('Catppuccin themes are stored and render Messenger in their own scheme', async () => {
+	const {themeScheme} = await load('src/shared.ts');
+	assert.equal(sanitize({theme: 'latte'}).theme, 'latte');
+	assert.equal(changed(defaults, 'theme', 'mocha').theme, 'mocha');
+	assert.deepEqual(['system', 'light', 'dark', 'oled', 'latte', 'mocha'].map(themeScheme), ['system', 'light', 'dark', 'dark', 'light', 'dark']);
+});

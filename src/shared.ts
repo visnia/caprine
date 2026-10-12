@@ -2,7 +2,7 @@
 export const MESSENGER = 'https://www.messenger.com';
 
 export const defaults = {
-	theme: 'system' as 'system' | 'light' | 'dark' | 'oled',
+	theme: 'system' as 'system' | 'light' | 'dark' | 'oled' | 'latte' | 'mocha',
 	zoomFactor: 1,
 	alwaysOnTop: false,
 	launchAtLogin: false,
@@ -25,10 +25,18 @@ export const defaults = {
 export type Settings = typeof defaults;
 
 export const choices: Partial<Record<keyof Settings, readonly string[]>> = {
-	theme: ['system', 'light', 'dark', 'oled'],
+	theme: ['system', 'light', 'dark', 'oled', 'latte', 'mocha'],
 	trayIconStyle: ['color', 'white', 'black'],
 	notificationSound: ['messenger', 'system', 'off'],
 };
+
+// The color scheme Messenger renders in under a theme; OLED and Catppuccin
+// restyle Messenger's own light or dark mode.
+export function themeScheme(theme: Settings['theme']): 'system' | 'light' | 'dark' {
+	if (theme === 'oled' || theme === 'mocha') return 'dark';
+	if (theme === 'latte') return 'light';
+	return theme;
+}
 
 export type UpdateStatus = {
 	state: 'unsupported' | 'idle' | 'checking' | 'upToDate' | 'downloading' | 'ready' | 'error';

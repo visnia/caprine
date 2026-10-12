@@ -2,7 +2,7 @@ import {app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, screen, she
 import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import {MESSENGER, zoomStep, type MessageNotice, type Settings} from '../shared';
+import {MESSENGER, themeScheme, zoomStep, type MessageNotice, type Settings} from '../shared';
 import {createNotifier, type Click} from './notifications';
 import {changed, loadSettings, saveSettings, setLaunchAtLogin} from './settings';
 import {installTitleBar, titleBarHeight, titleBarOptions} from './title-bar';
@@ -117,7 +117,7 @@ app.whenReady().then(() => {
 	});
 
 	const apply = () => {
-		nativeTheme.themeSource = settings.theme === 'oled' ? 'dark' : settings.theme;
+		nativeTheme.themeSource = themeScheme(settings.theme);
 		paintTitleBar();
 		window.setAlwaysOnTop(settings.alwaysOnTop);
 		contents.setZoomFactor(settings.zoomFactor);

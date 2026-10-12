@@ -10,7 +10,7 @@ This is a fork of [Caprine](https://github.com/sindresorhus/caprine), rewritten 
 - **Notification sound**: Messenger's own tone (default, silent notifications), the system notification sound (Messenger's tone muted), or none. Off also silences download and update notices.
 - **Unread badge**: read/unread tray icon and tooltip, and on Windows the taskbar overlay (up to `99+`). While chats are unread and Caprine is not focused, the tray icon and badge blink.
 - **Tray and window**: close to tray, or quit on close with no tray icon; launch at login, launch minimized, always on top, single instance, remembered window size and position.
-- **Appearance**: system/light/dark/OLED theme, which Caprine's own title bar follows too, code-block and scrollbar styles, your own `custom.css`, text zoom with **Ctrl+=**, **Ctrl+-** and **Ctrl+0**.
+- **Appearance**: system/light/dark/OLED/Catppuccin (Latte, Mocha) theme, which Caprine's own title bar follows too, code-block and scrollbar styles, your own `custom.css`, text zoom with **Ctrl+=**, **Ctrl+-** and **Ctrl+0**.
 - **Links** open in your default browser, with Facebook `l.php` tracking redirects removed.
 - **Calls** open in separate windows. Camera, microphone and screen sharing are allowed for `https://www.messenger.com` only. Screen sharing shares the whole primary screen (on Wayland the desktop's own picker appears).
 - **Downloads** go to your Downloads folder without overwriting; a notification reveals the file.

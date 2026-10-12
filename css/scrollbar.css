@@ -43,3 +43,17 @@ html.dark-mode ::-webkit-scrollbar-track {
 html.dark-mode ::-webkit-scrollbar-track:hover {
 	background: linear-gradient(#ffffff10, #ffffff10), var(--caprine-scrollbar-track);
 }
+
+/* Catppuccin: the track matches the panels. */
+html.catppuccin {
+	--caprine-scrollbar-track: var(--ctp-base);
+}
+html.catppuccin ::-webkit-scrollbar-thumb {
+	background-color: var(--ctp-surface2);
+}
+html.catppuccin ::-webkit-scrollbar-track {
+	background: var(--caprine-scrollbar-track);
+}
+html.catppuccin ::-webkit-scrollbar-track:hover {
+	background: var(--ctp-mantle);
+}

@@ -1,0 +1,175 @@
+/* Catppuccin themes (https://catppuccin.com/palette): Latte on top of
+Messenger's light mode, Mocha on top of its dark mode.
+
+Like the OLED theme, only Messenger's design tokens are overridden, never its
+generated class names, and the signed-in root is matched through Caprine's
+page marker. Only subtrees in the flavor's own mode are restyled, so surfaces
+Messenger keeps dark in light mode (such as the media viewer) stay as they are.
+
+Chat themes set their tokens inline on the conversation, so those few are
+overridden without !important (see the last rule) and the theme keeps them. */
+
+html.catppuccin-latte {
+	--ctp-rosewater: #dc8a78;
+	--ctp-flamingo: #dd7878;
+	--ctp-pink: #ea76cb;
+	--ctp-mauve: #8839ef;
+	--ctp-red: #d20f39;
+	--ctp-maroon: #e64553;
+	--ctp-peach: #fe640b;
+	--ctp-yellow: #df8e1d;
+	--ctp-green: #40a02b;
+	--ctp-teal: #179299;
+	--ctp-sky: #04a5e5;
+	--ctp-sapphire: #209fb5;
+	--ctp-blue: #1e66f5;
+	--ctp-lavender: #7287fd;
+	--ctp-text: #4c4f69;
+	--ctp-subtext1: #5c5f77;
+	--ctp-subtext0: #6c6f85;
+	--ctp-overlay2: #7c7f93;
+	--ctp-overlay1: #8c8fa1;
+	--ctp-overlay0: #9ca0b0;
+	--ctp-surface2: #acb0be;
+	--ctp-surface1: #bcc0cc;
+	--ctp-surface0: #ccd0da;
+	--ctp-base: #eff1f5;
+	--ctp-mantle: #e6e9ef;
+	--ctp-crust: #dce0e8;
+
+	/* Menus and popovers: shadows separate them on a light page. */
+	--ctp-raised: var(--ctp-base);
+	/* Messenger's own light-mode accent, kept for your message bubbles. */
+	--ctp-messenger-accent: #0766ff;
+}
+
+html.catppuccin-mocha {
+	--ctp-rosewater: #f5e0dc;
+	--ctp-flamingo: #f2cdcd;
+	--ctp-pink: #f5c2e7;
+	--ctp-mauve: #cba6f7;
+	--ctp-red: #f38ba8;
+	--ctp-maroon: #eba0ac;
+	--ctp-peach: #fab387;
+	--ctp-yellow: #f9e2af;
+	--ctp-green: #a6e3a1;
+	--ctp-teal: #94e2d5;
+	--ctp-sky: #89dceb;
+	--ctp-sapphire: #74c7ec;
+	--ctp-blue: #89b4fa;
+	--ctp-lavender: #b4befe;
+	--ctp-text: #cdd6f4;
+	--ctp-subtext1: #bac2de;
+	--ctp-subtext0: #a6adc8;
+	--ctp-overlay2: #9399b2;
+	--ctp-overlay1: #7f849c;
+	--ctp-overlay0: #6c7086;
+	--ctp-surface2: #585b70;
+	--ctp-surface1: #45475a;
+	--ctp-surface0: #313244;
+	--ctp-base: #1e1e2e;
+	--ctp-mantle: #181825;
+	--ctp-crust: #11111b;
+
+	/* Shadows barely show on a dark page, so floating surfaces are lifted. */
+	--ctp-raised: var(--ctp-surface0);
+	--ctp-messenger-accent: hsl(214, 100%, 59%);
+}
+
+html.catppuccin {
+	/* The accent: buttons, switches, links in focus, your own message bubbles. */
+	--ctp-accent: var(--ctp-mauve);
+}
+
+html.catppuccin-latte[data-caprine-page='app'],
+html.catppuccin-latte.__fb-light-mode,
+html.catppuccin-latte .__fb-light-mode,
+html.catppuccin-mocha[data-caprine-page='app'],
+html.catppuccin-mocha.__fb-dark-mode,
+html.catppuccin-mocha .__fb-dark-mode {
+	/* The window frame behind the panels, matched by the title bar. */
+	--web-wash: var(--ctp-mantle) !important;
+
+	--surface-background: var(--ctp-base) !important;
+	--card-background: var(--ctp-base) !important;
+	--card-background-flat: var(--ctp-mantle) !important;
+	--messenger-card-background: var(--ctp-base) !important;
+	--messenger-reply-background: var(--ctp-base) !important;
+	--nav-bar-background: var(--ctp-base) !important;
+	--nav-bar-background-gradient: linear-gradient(to top, var(--ctp-base), color-mix(in srgb, var(--ctp-base) 90%, transparent), color-mix(in srgb, var(--ctp-base) 70%, transparent), color-mix(in srgb, var(--ctp-base) 40%, transparent), transparent) !important;
+	--nav-bar-background-gradient-wash: linear-gradient(to top, var(--ctp-mantle), color-mix(in srgb, var(--ctp-mantle) 90%, transparent), color-mix(in srgb, var(--ctp-mantle) 70%, transparent), color-mix(in srgb, var(--ctp-mantle) 40%, transparent), transparent) !important;
+	--input-background: var(--ctp-base) !important;
+	--input-background-disabled: var(--ctp-mantle) !important;
+	--popover-background: var(--ctp-raised) !important;
+	--popover-card-background: var(--ctp-raised) !important;
+	--toast-background: var(--ctp-raised) !important;
+	--overlay-alpha-80: color-mix(in srgb, var(--ctp-crust) 80%, transparent) !important;
+	--tooltip-background: color-mix(in srgb, var(--ctp-crust) 80%, transparent) !important;
+
+	/* Filled controls: the search box, composer, chips and grey buttons. */
+	--comment-background: var(--ctp-surface0) !important;
+	--comment-footer-background: var(--ctp-surface1) !important;
+	--search-input-background: var(--ctp-surface0) !important;
+	--text-input-bar-background: var(--ctp-surface0) !important;
+	--chip-background: var(--ctp-surface0) !important;
+	--secondary-button-background: var(--ctp-surface0) !important;
+	--secondary-button-background-floating: var(--ctp-surface0) !important;
+	--secondary-button-text: var(--ctp-text) !important;
+	--secondary-button-icon: var(--ctp-text) !important;
+	--disabled-button-background: var(--ctp-surface0) !important;
+	--wash: var(--ctp-surface0) !important;
+	--attachment-footer-background: var(--ctp-surface0) !important;
+
+	--divider: var(--ctp-surface0) !important;
+	--input-border-color: var(--ctp-surface1) !important;
+	--border-focused: var(--ctp-overlay1) !important;
+	--switch-inactive: var(--ctp-surface1) !important;
+	--hover-overlay: color-mix(in srgb, var(--ctp-text) 8%, transparent) !important;
+	--press-overlay: color-mix(in srgb, var(--ctp-text) 15%, transparent) !important;
+
+	--primary-text: var(--ctp-text) !important;
+	--secondary-text: var(--ctp-subtext0) !important;
+	--secondary-icon: var(--ctp-subtext0) !important;
+	--section-header-text: var(--ctp-subtext1) !important;
+	--list-cell-chevron: var(--ctp-subtext0) !important;
+	--placeholder-text: var(--ctp-overlay1) !important;
+	--placeholder-icon: var(--ctp-overlay1) !important;
+	--disabled-text: var(--ctp-overlay0) !important;
+	--disabled-icon: var(--ctp-overlay0) !important;
+	--disabled-button-text: var(--ctp-overlay0) !important;
+	--text-input-outside-label: var(--ctp-text) !important;
+	--toast-text: var(--ctp-text) !important;
+	--blue-link: var(--ctp-blue) !important;
+	--toast-text-link: var(--ctp-blue) !important;
+
+	--accent: var(--ctp-accent) !important;
+	--messenger-blue: var(--ctp-accent) !important;
+	--switch-active: var(--ctp-accent) !important;
+	--input-label-color-highlighted: var(--ctp-accent) !important;
+	--progress-ring-blue-foreground: var(--ctp-accent) !important;
+	--focus-ring-blue: var(--ctp-accent) !important;
+	--primary-button-background: var(--ctp-accent) !important;
+	--primary-button-text: var(--ctp-base) !important;
+	--primary-button-icon: var(--ctp-base) !important;
+	--highlight-bg: color-mix(in srgb, var(--ctp-accent) 20%, transparent) !important;
+	--text-highlight: color-mix(in srgb, var(--ctp-accent) 30%, transparent) !important;
+
+	--positive: var(--ctp-green) !important;
+	--negative: var(--ctp-red) !important;
+	--warning: var(--ctp-yellow) !important;
+	--notification-badge: var(--ctp-red) !important;
+}
+
+/* Inline chat-theme tokens outrank these; the selectors still outrank
+Messenger's own :root and mode rules. */
+html.catppuccin-latte[data-caprine-page='app'],
+html.catppuccin-latte.__fb-light-mode,
+html.catppuccin-latte .__fb-light-mode,
+html.catppuccin-mocha[data-caprine-page='app'],
+html.catppuccin-mocha.__fb-dark-mode,
+html.catppuccin-mocha .__fb-dark-mode {
+	--primary-icon: var(--ctp-text);
+	--chat-incoming-message-bubble-background-color: var(--ctp-surface0);
+	/* Messenger's default is var(--accent); your own messages stay blue. */
+	--chat-outgoing-message-bubble-background-color: var(--ctp-messenger-accent);
+}
